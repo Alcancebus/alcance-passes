@@ -1,0 +1,109 @@
+import os,csv
+from io import StringIO
+from datetime import datetime,date
+from fastapi import FastAPI,Request,Form,HTTPException
+from fastapi.responses import HTMLResponse,RedirectResponse,StreamingResponse
+from fastapi.templating import Jinja2Templates
+from starlette.middleware.sessions import SessionMiddleware
+from sqlalchemy import create_engine,Column,Integer,String,DateTime,Boolean,ForeignKey
+from sqlalchemy.orm import declarative_base,sessionmaker
+from passlib.context import CryptContext
+from pydantic import BaseModel
+
+url=os.getenv("DATABASE_URL","sqlite:///./passes.db")
+if url.startswith("postgres://"): url=url.replace("postgres://","postgresql+psycopg://",1)
+elif url.startswith("postgresql://"): url=url.replace("postgresql://","postgresql+psycopg://",1)
+engine=create_engine(url,connect_args={"check_same_thread":False} if url.startswith("sqlite") else {})
+DB=sessionmaker(bind=engine); Base=declarative_base(); crypt=CryptContext(schemes=["bcrypt"],deprecated="auto")
+app=FastAPI(title="Alcance Passes"); app.add_middleware(SessionMiddleware,secret_key=os.getenv("SESSION_SECRET","dev-secret"))
+templates=Jinja2Templates(directory="templates"); DEVICE_TOKEN=os.getenv("DEVICE_TOKEN","DEMO-TOKEN")
+
+class User(Base):
+ __tablename__="users"; id=Column(Integer,primary_key=True); username=Column(String,unique=True); password_hash=Column(String); role=Column(String)
+class Passenger(Base):
+ __tablename__="passengers"; id=Column(Integer,primary_key=True); name=Column(String); pass_number=Column(String,unique=True); card_uid=Column(String,unique=True); valid_until=Column(String); active=Column(Boolean,default=True)
+class Trip(Base):
+ __tablename__="trips"; id=Column(Integer,primary_key=True); device=Column(String); line=Column(String); direction=Column(String); started_at=Column(DateTime,default=datetime.now); ended_at=Column(DateTime,nullable=True)
+class Validation(Base):
+ __tablename__="validations"; id=Column(Integer,primary_key=True); trip_id=Column(Integer,ForeignKey("trips.id")); passenger_id=Column(Integer,ForeignKey("passengers.id"),nullable=True); card_uid=Column(String); result=Column(String); timestamp=Column(DateTime,default=datetime.now)
+Base.metadata.create_all(engine)
+def seed():
+ d=DB()
+ try:
+  if d.query(User).count()==0:
+   d.add_all([User(username="admin",password_hash=crypt.hash("admin123"),role="admin"),User(username="cim",password_hash=crypt.hash("cim123"),role="cim")]); d.commit()
+ finally:d.close()
+seed()
+def ok(r,roles):
+ u=r.session.get("u"); return u and u["role"] in roles
+def tok(t):
+ if t!=DEVICE_TOKEN: raise HTTPException(401,"Dispositivo não autorizado")
+
+@app.get("/",response_class=HTMLResponse)
+def home(r:Request): return templates.TemplateResponse("login.html",{"request":r,"error":None})
+@app.post("/login")
+def login(r:Request,username:str=Form(...),password:str=Form(...)):
+ d=DB(); u=d.query(User).filter_by(username=username).first(); d.close()
+ if not u or not crypt.verify(password,u.password_hash): return templates.TemplateResponse("login.html",{"request":r,"error":"Credenciais inválidas"},status_code=401)
+ r.session["u"]={"username":u.username,"role":u.role}; return RedirectResponse("/admin" if u.role=="admin" else "/cim",303)
+@app.get("/logout")
+def logout(r:Request):r.session.clear();return RedirectResponse("/",303)
+
+@app.get("/admin",response_class=HTMLResponse)
+def admin(r:Request):
+ if not ok(r,["admin"]):return RedirectResponse("/",303)
+ d=DB(); ps=d.query(Passenger).order_by(Passenger.name).all(); d.close()
+ return templates.TemplateResponse("admin.html",{"request":r,"passengers":ps})
+@app.post("/admin/passenger")
+def add(r:Request,name:str=Form(...),pass_number:str=Form(...),card_uid:str=Form(...),valid_until:str=Form(...)):
+ if not ok(r,["admin"]):return RedirectResponse("/",303)
+ d=DB(); d.add(Passenger(name=name,pass_number=pass_number,card_uid=card_uid.upper(),valid_until=valid_until)); d.commit(); d.close();return RedirectResponse("/admin",303)
+
+class Start(BaseModel):device:str;line:str;direction:str;token:str
+class Read(BaseModel):trip_id:int;card_uid:str;token:str
+class End(BaseModel):trip_id:int;token:str
+
+@app.post("/api/trip/start")
+def start(x:Start):
+ tok(x.token);d=DB();t=Trip(device=x.device,line=x.line,direction=x.direction);d.add(t);d.commit();d.refresh(t);i=t.id;d.close();return{"trip_id":i}
+@app.post("/api/validate")
+def validate(x:Read):
+ tok(x.token);d=DB();t=d.get(Trip,x.trip_id)
+ if not t or t.ended_at:d.close();raise HTTPException(400,"Viagem inválida")
+ uid=x.card_uid.upper();p=d.query(Passenger).filter_by(card_uid=uid).first()
+ result="SEM PASSE" if not p else ("BLOQUEADO" if not p.active else ("EXPIRADO" if p.valid_until<date.today().isoformat() else "VALIDO"))
+ # duplicate same card on same trip: report it, don't add another validation
+ previous=d.query(Validation).filter_by(trip_id=t.id,card_uid=uid,result="VALIDO").first()
+ if previous and result=="VALIDO":
+  out={"result":"JA_LIDO","name":p.name,"pass_number":p.pass_number,"time":previous.timestamp.strftime("%H:%M")};d.close();return out
+ v=Validation(trip_id=t.id,passenger_id=p.id if p else None,card_uid=uid,result=result);d.add(v);d.commit()
+ out={"result":result,"name":p.name if p else "","pass_number":p.pass_number if p else "","time":v.timestamp.strftime("%H:%M")};d.close();return out
+@app.get("/api/trip/{tid}/passengers")
+def passengers(tid:int,token_value:str):
+ tok(token_value);d=DB();rows=d.query(Validation,Passenger).outerjoin(Passenger,Validation.passenger_id==Passenger.id).filter(Validation.trip_id==tid).order_by(Validation.timestamp).all()
+ out=[{"name":p.name if p else "","pass_number":p.pass_number if p else "","result":v.result,"time":v.timestamp.strftime("%H:%M")} for v,p in rows];d.close();return out
+@app.post("/api/trip/end")
+def end(x:End):
+ tok(x.token);d=DB();t=d.get(Trip,x.trip_id)
+ if t:t.ended_at=datetime.now();d.commit()
+ d.close();return{"ok":True}
+
+@app.get("/cim",response_class=HTMLResponse)
+def cim(r:Request,month:str|None=None):
+ if not ok(r,["admin","cim"]):return RedirectResponse("/",303)
+ month=month or date.today().strftime("%Y-%m");d=DB();ts=[t for t in d.query(Trip).order_by(Trip.started_at.desc()).all() if t.started_at.strftime("%Y-%m")==month]
+ data=[(t,d.query(Validation).filter_by(trip_id=t.id,result="VALIDO").count()) for t in ts];d.close()
+ return templates.TemplateResponse("cim.html",{"request":r,"month":month,"data":data})
+@app.get("/cim/trip/{tid}",response_class=HTMLResponse)
+def detail(tid:int,r:Request):
+ if not ok(r,["admin","cim"]):return RedirectResponse("/",303)
+ d=DB();t=d.get(Trip,tid);rows=d.query(Validation,Passenger).outerjoin(Passenger,Validation.passenger_id==Passenger.id).filter(Validation.trip_id==tid).order_by(Validation.timestamp).all();d.close()
+ return templates.TemplateResponse("trip.html",{"request":r,"trip":t,"rows":rows})
+@app.get("/cim/export.csv")
+def export(r:Request,month:str):
+ if not ok(r,["admin","cim"]):return RedirectResponse("/",303)
+ d=DB();ts=[t for t in d.query(Trip).all() if t.started_at.strftime("%Y-%m")==month];s=StringIO();w=csv.writer(s,delimiter=";");w.writerow(["Data","Linha","Sentido","Viatura","Nome","Passe","Hora","Estado"])
+ for t in ts:
+  for v,p in d.query(Validation,Passenger).outerjoin(Passenger,Validation.passenger_id==Passenger.id).filter(Validation.trip_id==t.id).all():
+   w.writerow([t.started_at.strftime("%Y-%m-%d"),t.line,t.direction,t.device,p.name if p else "",p.pass_number if p else "",v.timestamp.strftime("%H:%M:%S"),v.result])
+ d.close();return StreamingResponse(iter([s.getvalue()]),media_type="text/csv",headers={"Content-Disposition":f'attachment; filename="cim_{month}.csv"'})

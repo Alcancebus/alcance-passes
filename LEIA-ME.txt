@@ -1,0 +1,45 @@
+ALCANCE PASSES COMPLETO V5
+
+PASTAS
+- server: FastAPI + PostgreSQL + Render + Admin + Portal CIM.
+- android: projeto SUNMI V5.
+
+LINHAS
+1. Santa Marta - São Pedro - Rossas
+2. Anjos - Agra - Rossas
+Sentidos: Ida e Volta.
+
+V5 SUNMI
+- NFC
+- inicia viagem
+- nome + número do passe
+- evita dupla validação do mesmo passe na mesma viagem
+- lista passageiros da viagem para fiscalização
+- comunica por HTTPS com o servidor
+
+PORTAL CIM
+- login separado
+- consulta por mês
+- viagens, linha, sentido, autocarro e nº de passageiros
+- detalhe com nome e nº do passe
+- exportação CSV mensal
+
+ANTES DE COMPILAR A V5
+1. Publicar /server no Render.
+2. Obter o endereço HTTPS.
+3. Obter DEVICE_TOKEN no Render.
+4. Em android/.../MainActivity.java substituir:
+   COLOCAR-ENDERECO-RENDER
+   COLOCAR_DEVICE_TOKEN
+5. Para o segundo equipamento trocar DEVICE de BUS 01 para BUS 02.
+6. Compilar no Android Studio.
+
+Credenciais INICIAIS de demonstração:
+admin / admin123
+cim / cim123
+Devem ser alteradas antes de utilização real.
+
+IMPORTANTE:
+O pacote está funcional como protótipo online, mas o modo offline robusto
+(fila local + sincronização posterior) AINDA NÃO está implementado nesta V5.
+Não usar comercialmente até essa etapa, segurança, backups e RGPD serem revistos.
