@@ -1,7 +1,7 @@
 import os,csv
 from io import StringIO
 from datetime import datetime,date
-from fastapi import FastAPI,Request,Form,HTTPException
+from fastapi import FastAPI,Request,Form,HTTPException,UploadFile,File
 from fastapi.responses import HTMLResponse,RedirectResponse,StreamingResponse
 from fastapi.templating import Jinja2Templates
 from starlette.middleware.sessions import SessionMiddleware
@@ -170,6 +170,109 @@ def delete_historical_trip(hid:int,r:Request):
 
  d.close()
  return RedirectResponse("/admin",303)
+@app.post("/admin/historical-trip/import")
+async def import_historical_trips(
+ r:Request,
+ file:UploadFile=File(...)
+):
+ if not ok(r,["admin"]):
+  return RedirectResponse("/",303)
+
+ try:
+  raw=await file.read()
+
+  # Aceita CSV UTF-8 normal e ficheiros exportados pelo Excel
+  try:
+   text=raw.decode("utf-8-sig")
+  except UnicodeDecodeError:
+   text=raw.decode("cp1252")
+
+  reader=csv.DictReader(StringIO(text),delimiter=";")
+
+  required={
+   "Data",
+   "Hora",
+   "Linha",
+   "Sentido",
+   "Autocarro",
+   "Passageiros"
+  }
+
+  if not reader.fieldnames or not required.issubset(set(reader.fieldnames)):
+   raise HTTPException(
+    400,
+    "CSV inválido. Colunas obrigatórias: Data;Hora;Linha;Sentido;Autocarro;Passageiros"
+   )
+
+  d=DB()
+  imported=0
+
+  try:
+   for row in reader:
+
+    # Ignorar linhas completamente vazias
+    if not any((v or "").strip() for v in row.values()):
+     continue
+
+    started=datetime.strptime(
+     row["Data"].strip()+" "+row["Hora"].strip(),
+     "%Y-%m-%d %H:%M"
+    )
+
+    line=row["Linha"].strip()
+    direction=row["Sentido"].strip()
+    device=row["Autocarro"].strip()
+    passenger_count=int(row["Passageiros"].strip())
+    notes=(row.get("Observação") or "").strip()
+
+    if passenger_count < 0:
+     raise ValueError("Número de passageiros inválido")
+
+    # Evita importar novamente a mesma viagem
+    exists=d.query(HistoricalTrip).filter(
+     HistoricalTrip.started_at==started,
+     HistoricalTrip.line==line,
+     HistoricalTrip.direction==direction,
+     HistoricalTrip.device==device
+    ).first()
+
+    if exists:
+     continue
+
+    d.add(HistoricalTrip(
+     started_at=started,
+     line=line,
+     direction=direction,
+     device=device,
+     passenger_count=passenger_count,
+     notes=notes
+    ))
+
+    imported+=1
+
+   d.commit()
+
+  except:
+   d.rollback()
+   raise
+
+  finally:
+   d.close()
+
+  return RedirectResponse(
+   f"/admin?imported={imported}",
+   303
+  )
+
+ except HTTPException:
+  raise
+
+ except Exception as e:
+  raise HTTPException(
+   400,
+   "Erro ao importar CSV: "+str(e)
+  )
+
 class Start(BaseModel):device:str;line:str;direction:str;token:str
 class Read(BaseModel):trip_id:int;card_uid:str;token:str
 class End(BaseModel):trip_id:int;token:str
