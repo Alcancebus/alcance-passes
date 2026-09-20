@@ -55,7 +55,61 @@ th{
 
 <a href="/cim">Portal CIM</a> |
 <a href="/logout">Sair</a>
+<div class="box">
 
+<h2>Segurança</h2>
+<h3>Alterar palavra-passe de Administrador</h3>
+
+{% if request.query_params.get("password_changed") %}
+<p style="color:green;font-weight:bold;">
+Palavra-passe alterada com sucesso.
+</p>
+{% endif %}
+
+{% if request.query_params.get("password_error") == "current" %}
+<p style="color:red;">
+A palavra-passe atual está incorreta.
+</p>
+{% endif %}
+
+{% if request.query_params.get("password_error") == "confirm" %}
+<p style="color:red;">
+As novas palavras-passe não coincidem.
+</p>
+{% endif %}
+
+{% if request.query_params.get("password_error") == "short" %}
+<p style="color:red;">
+A nova palavra-passe deve ter pelo menos 10 caracteres.
+</p>
+{% endif %}
+
+<form method="post" action="/admin/change-password">
+
+<input type="password"
+       name="current_password"
+       placeholder="Palavra-passe atual"
+       required>
+
+<input type="password"
+       name="new_password"
+       placeholder="Nova palavra-passe"
+       minlength="10"
+       required>
+
+<input type="password"
+       name="confirm_password"
+       placeholder="Confirmar nova palavra-passe"
+       minlength="10"
+       required>
+
+<button type="submit">
+Alterar palavra-passe
+</button>
+
+</form>
+
+</div>
 <h2>Novo passe</h2>
 
 <form method="post" action="/admin/passenger">
