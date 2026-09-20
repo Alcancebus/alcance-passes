@@ -40,9 +40,31 @@ Base.metadata.create_all(engine)
 def seed():
  d=DB()
  try:
+  admin_password=os.getenv("ADMIN_INITIAL_PASSWORD")
+  cim_password=os.getenv("CIM_INITIAL_PASSWORD")
+
   if d.query(User).count()==0:
-   d.add_all([User(username="admin",password_hash=crypt.hash("admin123"),role="admin"),User(username="cim",password_hash=crypt.hash("cim123"),role="cim")]); d.commit()
- finally:d.close()
+   if not admin_password or not cim_password:
+    raise RuntimeError(
+     "ADMIN_INITIAL_PASSWORD e CIM_INITIAL_PASSWORD não configuradas"
+    )
+
+   d.add_all([
+    User(
+     username="admin",
+     password_hash=crypt.hash(admin_password),
+     role="admin"
+    ),
+    User(
+     username="cim",
+     password_hash=crypt.hash(cim_password),
+     role="cim"
+    )
+   ])
+   d.commit()
+ finally:
+  d.close()
+
 seed()
 def ok(r,roles):
  u=r.session.get("u"); return u and u["role"] in roles
