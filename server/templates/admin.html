@@ -152,7 +152,37 @@ Registar viagem histórica
 </form>
 
 </div>
+<h2>Viagens históricas registadas</h2>
 
+<table>
+<tr>
+    <th>Data / Hora</th>
+    <th>Linha</th>
+    <th>Sentido</th>
+    <th>Autocarro</th>
+    <th>Passageiros</th>
+    <th>Observação</th>
+</tr>
+
+{% for h in historical %}
+<tr>
+    <td>{{h.started_at.strftime("%d/%m/%Y %H:%M")}}</td>
+    <td>{{h.line}}</td>
+    <td>{{h.direction}}</td>
+    <td>{{h.device}}</td>
+    <td>{{h.passenger_count}}</td>
+    <td>{{h.notes or ""}}</td>
+</tr>
+
+{% else %}
+<tr>
+    <td colspan="6">
+        Nenhuma viagem histórica registada.
+    </td>
+</tr>
+{% endfor %}
+
+</table>
 
 <h2>Passes</h2>
 
