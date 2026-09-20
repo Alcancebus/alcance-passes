@@ -48,7 +48,12 @@ def ok(r,roles):
  u=r.session.get("u"); return u and u["role"] in roles
 def tok(t):
  if t!=DEVICE_TOKEN: raise HTTPException(401,"Dispositivo não autorizado")
-
+@app.get("/",response_class=HTMLResponse)
+def home(r:Request):
+ return templates.TemplateResponse(
+  "login.html",
+  {"request":r,"error":None}
+ )
 @app.get("/admin",response_class=HTMLResponse)
 def admin(r:Request):
  if not ok(r,["admin"]):
