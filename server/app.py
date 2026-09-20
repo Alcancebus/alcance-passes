@@ -89,6 +89,55 @@ def admin(r:Request):
 def add(r:Request,name:str=Form(...),pass_number:str=Form(...),card_uid:str=Form(...),valid_until:str=Form(...)):
  if not ok(r,["admin"]):return RedirectResponse("/",303)
  d=DB(); d.add(Passenger(name=name,pass_number=pass_number,card_uid=card_uid.upper(),valid_until=valid_until)); d.commit(); d.close();return RedirectResponse("/admin",303)
+@app.post("/admin/passenger/{pid}/edit")
+def edit_passenger(
+ pid:int,
+ r:Request,
+ name:str=Form(...),
+ pass_number:str=Form(...),
+ card_uid:str=Form(...),
+ valid_until:str=Form(...)
+):
+ if not ok(r,["admin"]):
+  return RedirectResponse("/",303)
+
+ d=DB()
+ p=d.get(Passenger,pid)
+
+ if p:
+  p.name=name.strip()
+  p.pass_number=pass_number.strip()
+  p.card_uid=card_uid.strip().upper()
+  p.valid_until=valid_until
+  d.commit()
+
+ d.close()
+ return RedirectResponse("/admin",303)
+
+
+@app.post("/admin/passenger/{pid}/delete")
+def delete_passenger(pid:int,r:Request):
+ if not ok(r,["admin"]):
+  return RedirectResponse("/",303)
+
+ d=DB()
+ p=d.get(Passenger,pid)
+
+ if p:
+  # Mantém as validações antigas, mas deixa de as ligar
+  # ao passe que está a ser eliminado.
+  d.query(Validation).filter(
+   Validation.passenger_id==pid
+  ).update(
+   {Validation.passenger_id:None},
+   synchronize_session=False
+  )
+
+  d.delete(p)
+  d.commit()
+
+ d.close()
+ return RedirectResponse("/admin",303)
 @app.post("/admin/historical-trip")
 def add_historical_trip(
  r:Request,
