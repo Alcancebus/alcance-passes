@@ -24,6 +24,16 @@ class Passenger(Base):
  __tablename__="passengers"; id=Column(Integer,primary_key=True); name=Column(String); pass_number=Column(String,unique=True); card_uid=Column(String,unique=True); valid_until=Column(String); active=Column(Boolean,default=True)
 class Trip(Base):
  __tablename__="trips"; id=Column(Integer,primary_key=True); device=Column(String); line=Column(String); direction=Column(String); started_at=Column(DateTime,default=datetime.now); ended_at=Column(DateTime,nullable=True)
+class HistoricalTrip(Base):
+ __tablename__="historical_trips"
+ id=Column(Integer,primary_key=True)
+ started_at=Column(DateTime)
+ line=Column(String)
+ direction=Column(String)
+ device=Column(String)
+ passenger_count=Column(Integer)
+ notes=Column(String,nullable=True)
+ created_at=Column(DateTime,default=datetime.now)
 class Validation(Base):
  __tablename__="validations"; id=Column(Integer,primary_key=True); trip_id=Column(Integer,ForeignKey("trips.id")); passenger_id=Column(Integer,ForeignKey("passengers.id"),nullable=True); card_uid=Column(String); result=Column(String); timestamp=Column(DateTime,default=datetime.now)
 Base.metadata.create_all(engine)
