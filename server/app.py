@@ -224,9 +224,94 @@ def detail(tid:int,r:Request):
  return templates.TemplateResponse("trip.html",{"request":r,"trip":t,"rows":rows})
 @app.get("/cim/export.csv")
 def export(r:Request,month:str):
- if not ok(r,["admin","cim"]):return RedirectResponse("/",303)
- d=DB();ts=[t for t in d.query(Trip).all() if t.started_at.strftime("%Y-%m")==month];s=StringIO();w=csv.writer(s,delimiter=";");w.writerow(["Data","Linha","Sentido","Viatura","Nome","Passe","Hora","Estado"])
- for t in ts:
-  for v,p in d.query(Validation,Passenger).outerjoin(Passenger,Validation.passenger_id==Passenger.id).filter(Validation.trip_id==t.id).all():
-   w.writerow([t.started_at.strftime("%Y-%m-%d"),t.line,t.direction,t.device,p.name if p else "",p.pass_number if p else "",v.timestamp.strftime("%H:%M:%S"),v.result])
- d.close();return StreamingResponse(iter([s.getvalue()]),media_type="text/csv",headers={"Content-Disposition":f'attachment; filename="cim_{month}.csv"'})
+ if not ok(r,["admin","cim"]):
+  return RedirectResponse("/",303)
+
+ d=DB()
+ s=StringIO()
+ w=csv.writer(s,delimiter=";")
+
+ w.writerow([
+  "Data",
+  "Hora",
+  "Linha",
+  "Sentido",
+  "Autocarro",
+  "Nome",
+  "Passe",
+  "Estado",
+  "Origem",
+  "Total passageiros",
+  "Observação"
+ ])
+
+ # VIAGENS NFC
+ trips=[
+  t for t in d.query(Trip).order_by(Trip.started_at).all()
+  if t.started_at.strftime("%Y-%m")==month
+ ]
+
+ for t in trips:
+  rows=d.query(Validation,Passenger).outerjoin(
+   Passenger,
+   Validation.passenger_id==Passenger.id
+  ).filter(
+   Validation.trip_id==t.id
+  ).order_by(
+   Validation.timestamp
+  ).all()
+
+  valid_count=sum(
+   1 for v,p in rows if v.result=="VALIDO"
+  )
+
+  for v,p in rows:
+   w.writerow([
+    t.started_at.strftime("%Y-%m-%d"),
+    v.timestamp.strftime("%H:%M:%S"),
+    t.line,
+    t.direction,
+    t.device,
+    p.name if p else "",
+    p.pass_number if p else "",
+    v.result,
+    "NFC",
+    valid_count,
+    ""
+   ])
+
+ # VIAGENS HISTÓRICAS
+ historical=[
+  h for h in d.query(HistoricalTrip).order_by(
+   HistoricalTrip.started_at
+  ).all()
+  if h.started_at.strftime("%Y-%m")==month
+ ]
+
+ for h in historical:
+  w.writerow([
+   h.started_at.strftime("%Y-%m-%d"),
+   h.started_at.strftime("%H:%M:%S"),
+   h.line,
+   h.direction,
+   h.device,
+   "",
+   "",
+   "REGISTO HISTÓRICO",
+   "Manual / Histórico",
+   h.passenger_count,
+   h.notes or ""
+  ])
+
+ d.close()
+
+ content="\ufeff"+s.getvalue()
+
+ return StreamingResponse(
+  iter([content]),
+  media_type="text/csv; charset=utf-8",
+  headers={
+   "Content-Disposition":
+   f'attachment; filename="cim_{month}.csv"'
+  }
+ )
