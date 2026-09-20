@@ -1,1 +1,184 @@
-<html><body style="font-family:Arial;margin:30px"><h1>Administração Alcance Bus</h1><a href="/cim">Portal CIM</a> | <a href="/logout">Sair</a><h2>Novo passe</h2><form method="post" action="/admin/passenger"><input name="name" placeholder="Nome"><input name="pass_number" placeholder="N.º passe"><input name="card_uid" placeholder="UID NFC"><input type="date" name="valid_until"><button>Criar</button></form><h2>Passes</h2><table border="1" cellpadding="6"><tr><th>Nome</th><th>N.º</th><th>UID</th><th>Validade</th></tr>{% for p in passengers %}<tr><td>{{p.name}}</td><td>{{p.pass_number}}</td><td>{{p.card_uid}}</td><td>{{p.valid_until}}</td></tr>{% endfor %}</table></body></html>
+<html lang="pt">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Administração - Alcance Bus</title>
+
+<style>
+body{
+    font-family:Arial,sans-serif;
+    margin:30px;
+    background:#f5f6f7;
+}
+.container{
+    max-width:1200px;
+    margin:auto;
+    background:white;
+    padding:25px;
+    border-radius:8px;
+}
+input,select,button{
+    padding:9px;
+    margin:4px;
+}
+button{
+    cursor:pointer;
+}
+table{
+    width:100%;
+    border-collapse:collapse;
+    margin-top:15px;
+}
+th,td{
+    border:1px solid #ddd;
+    padding:9px;
+}
+th{
+    background:#222;
+    color:white;
+    text-align:left;
+}
+.box{
+    margin-top:30px;
+    padding:20px;
+    background:#f5f5f5;
+    border-radius:8px;
+}
+</style>
+</head>
+
+<body>
+
+<div class="container">
+
+<h1>Administração Alcance Bus</h1>
+
+<a href="/cim">Portal CIM</a> |
+<a href="/logout">Sair</a>
+
+<h2>Novo passe</h2>
+
+<form method="post" action="/admin/passenger">
+
+<input name="name"
+       placeholder="Nome"
+       required>
+
+<input name="pass_number"
+       placeholder="N.º passe"
+       required>
+
+<input name="card_uid"
+       placeholder="UID NFC"
+       required>
+
+<input type="date"
+       name="valid_until"
+       required>
+
+<button type="submit">
+Criar passe
+</button>
+
+</form>
+
+
+<div class="box">
+
+<h2>Registar viagem histórica</h2>
+
+<p>
+Use esta opção para registar serviços realizados antes da utilização
+da validação NFC.
+</p>
+
+<form method="post" action="/admin/historical-trip">
+
+<label>Data:</label>
+<input type="date"
+       name="trip_date"
+       required>
+
+<label>Hora:</label>
+<input type="time"
+       name="trip_time"
+       required>
+
+<br>
+
+<label>Linha:</label>
+
+<select name="line" required>
+
+<option value="Linha 1 - Santa Marta - São Pedro - Rossas">
+Linha 1 — Santa Marta - São Pedro - Rossas
+</option>
+
+<option value="Linha 2 - Anjos - Agra - Rossas">
+Linha 2 — Anjos - Agra - Rossas
+</option>
+
+</select>
+
+<label>Sentido:</label>
+
+<select name="direction" required>
+<option value="Ida">Ida</option>
+<option value="Volta">Volta</option>
+</select>
+
+<br>
+
+<input name="device"
+       placeholder="Autocarro / matrícula"
+       required>
+
+<input type="number"
+       name="passenger_count"
+       min="0"
+       placeholder="N.º passageiros"
+       required>
+
+<br>
+
+<input name="notes"
+       style="width:500px"
+       placeholder="Observação (opcional)">
+
+<button type="submit">
+Registar viagem histórica
+</button>
+
+</form>
+
+</div>
+
+
+<h2>Passes</h2>
+
+<table>
+
+<tr>
+<th>Nome</th>
+<th>N.º</th>
+<th>UID NFC</th>
+<th>Validade</th>
+</tr>
+
+{% for p in passengers %}
+
+<tr>
+<td>{{p.name}}</td>
+<td>{{p.pass_number}}</td>
+<td>{{p.card_uid}}</td>
+<td>{{p.valid_until}}</td>
+</tr>
+
+{% endfor %}
+
+</table>
+
+</div>
+
+</body>
+</html>
