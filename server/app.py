@@ -113,7 +113,20 @@ def edit_passenger(
 
  d.close()
  return RedirectResponse("/admin",303)
+@app.post("/admin/passenger/{pid}/toggle")
+def toggle_passenger(pid:int,r:Request):
+ if not ok(r,["admin"]):
+  return RedirectResponse("/",303)
 
+ d=DB()
+ p=d.get(Passenger,pid)
+
+ if p:
+  p.active=not p.active
+  d.commit()
+
+ d.close()
+ return RedirectResponse("/admin",303)
 
 @app.post("/admin/passenger/{pid}/delete")
 def delete_passenger(pid:int,r:Request):
