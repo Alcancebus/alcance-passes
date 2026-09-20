@@ -116,7 +116,7 @@ def change_admin_password(
   d.close()
 
  return RedirectResponse("/admin?password_changed=1",303)
- @app.post("/admin/change-cim-password")
+@app.post("/admin/change-cim-password")
 def change_cim_password(
  r:Request,
  new_password:str=Form(...),
