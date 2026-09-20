@@ -150,7 +150,32 @@ Registar viagem histórica
 </button>
 
 </form>
+<hr style="margin:25px 0;">
 
+<h3>Importar histórico por CSV</h3>
+
+<p>
+Pode importar várias viagens de uma só vez através de um ficheiro CSV.
+</p>
+
+<form method="post"
+      action="/admin/historical-trip/import"
+      enctype="multipart/form-data">
+
+    <input type="file"
+           name="file"
+           accept=".csv"
+           required>
+
+    <button type="submit">
+        Importar CSV
+    </button>
+
+</form>
+
+<p style="font-size:13px;color:#666;">
+Formato: Data;Hora;Linha;Sentido;Autocarro;Passageiros;Observação
+</p>
 </div>
 <h2>Viagens históricas registadas</h2>
 
