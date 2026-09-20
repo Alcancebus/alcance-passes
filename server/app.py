@@ -79,7 +79,38 @@ def login(r:Request,username:str=Form(...),password:str=Form(...)):
  r.session["u"]={"username":u.username,"role":u.role}; return RedirectResponse("/admin" if u.role=="admin" else "/cim",303)
 @app.get("/logout")
 def logout(r:Request):r.session.clear();return RedirectResponse("/",303)
+@app.post("/admin/change-password")
+def change_admin_password(
+ r:Request,
+ current_password:str=Form(...),
+ new_password:str=Form(...),
+ confirm_password:str=Form(...)
+):
+ if not ok(r,["admin"]):
+  return RedirectResponse("/",303)
 
+ if new_password != confirm_password:
+  return RedirectResponse("/admin?password_error=confirm",303)
+
+ if len(new_password) < 10:
+  return RedirectResponse("/admin?password_error=short",303)
+
+ d=DB()
+
+ try:
+  username=r.session["u"]["username"]
+  u=d.query(User).filter_by(username=username).first()
+
+  if not u or not crypt.verify(current_password,u.password_hash):
+   return RedirectResponse("/admin?password_error=current",303)
+
+  u.password_hash=crypt.hash(new_password)
+  d.commit()
+
+ finally:
+  d.close()
+
+ return RedirectResponse("/admin?password_changed=1",303)
 @app.get("/admin",response_class=HTMLResponse)
 def admin(r:Request):
  if not ok(r,["admin"]):return RedirectResponse("/",303)
