@@ -49,8 +49,29 @@ def ok(r,roles):
 def tok(t):
  if t!=DEVICE_TOKEN: raise HTTPException(401,"Dispositivo não autorizado")
 
-@app.get("/",response_class=HTMLResponse)
-def home(r:Request): return templates.TemplateResponse("login.html",{"request":r,"error":None})
+@app.get("/admin",response_class=HTMLResponse)
+def admin(r:Request):
+ if not ok(r,["admin"]):
+  return RedirectResponse("/",303)
+
+ d=DB()
+
+ ps=d.query(Passenger).order_by(Passenger.name).all()
+
+ historical=d.query(HistoricalTrip).order_by(
+  HistoricalTrip.started_at.desc()
+ ).all()
+
+ d.close()
+
+ return templates.TemplateResponse(
+  "admin.html",
+  {
+   "request":r,
+   "passengers":ps,
+   "historical":historical
+  }
+ )
 @app.post("/login")
 def login(r:Request,username:str=Form(...),password:str=Form(...)):
  d=DB(); u=d.query(User).filter_by(username=username).first(); d.close()
