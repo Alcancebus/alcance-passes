@@ -162,24 +162,104 @@ Registar viagem histórica
     <th>Autocarro</th>
     <th>Passageiros</th>
     <th>Observação</th>
+    <th>Ações</th>
 </tr>
 
 {% for h in historical %}
+
 <tr>
-    <td>{{h.started_at.strftime("%d/%m/%Y %H:%M")}}</td>
-    <td>{{h.line}}</td>
-    <td>{{h.direction}}</td>
-    <td>{{h.device}}</td>
-    <td>{{h.passenger_count}}</td>
-    <td>{{h.notes or ""}}</td>
+<form method="post" action="/admin/historical-trip/{{h.id}}/edit">
+
+<td>
+    <input type="date"
+           name="trip_date"
+           value="{{h.started_at.strftime('%Y-%m-%d')}}"
+           required>
+
+    <input type="time"
+           name="trip_time"
+           value="{{h.started_at.strftime('%H:%M')}}"
+           required>
+</td>
+
+<td>
+<select name="line" required>
+
+<option value="Linha 1 - Santa Marta - São Pedro - Rossas"
+{% if h.line == "Linha 1 - Santa Marta - São Pedro - Rossas" %}selected{% endif %}>
+Linha 1 — Santa Marta - São Pedro - Rossas
+</option>
+
+<option value="Linha 2 - Anjos - Agra - Rossas"
+{% if h.line == "Linha 2 - Anjos - Agra - Rossas" %}selected{% endif %}>
+Linha 2 — Anjos - Agra - Rossas
+</option>
+
+</select>
+</td>
+
+<td>
+<select name="direction">
+<option value="Ida"
+{% if h.direction == "Ida" %}selected{% endif %}>
+Ida
+</option>
+
+<option value="Volta"
+{% if h.direction == "Volta" %}selected{% endif %}>
+Volta
+</option>
+</select>
+</td>
+
+<td>
+<input name="device"
+       value="{{h.device}}"
+       required>
+</td>
+
+<td>
+<input type="number"
+       name="passenger_count"
+       min="0"
+       value="{{h.passenger_count}}"
+       style="width:70px"
+       required>
+</td>
+
+<td>
+<input name="notes"
+       value="{{h.notes or ''}}">
+</td>
+
+<td>
+<button type="submit">
+Guardar
+</button>
+
+</form>
+
+<form method="post"
+      action="/admin/historical-trip/{{h.id}}/delete"
+      onsubmit="return confirm('Tem a certeza que pretende apagar esta viagem histórica?');">
+
+<button type="submit">
+Apagar
+</button>
+
+</form>
+</td>
+
 </tr>
 
 {% else %}
+
 <tr>
-    <td colspan="6">
-        Nenhuma viagem histórica registada.
-    </td>
+<td colspan="7">
+Nenhuma viagem histórica registada.
+</td>
 </tr>
+
 {% endfor %}
 
 </table>
