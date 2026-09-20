@@ -131,10 +131,71 @@ def end(x:End):
 
 @app.get("/cim",response_class=HTMLResponse)
 def cim(r:Request,month:str|None=None):
- if not ok(r,["admin","cim"]):return RedirectResponse("/",303)
- month=month or date.today().strftime("%Y-%m");d=DB();ts=[t for t in d.query(Trip).order_by(Trip.started_at.desc()).all() if t.started_at.strftime("%Y-%m")==month]
- data=[(t,d.query(Validation).filter_by(trip_id=t.id,result="VALIDO").count()) for t in ts];d.close()
- return templates.TemplateResponse("cim.html",{"request":r,"month":month,"data":data})
+ if not ok(r,["admin","cim"]):
+  return RedirectResponse("/",303)
+
+ month=month or date.today().strftime("%Y-%m")
+ d=DB()
+
+ # Viagens realizadas com validação NFC
+ trips=[
+  t for t in d.query(Trip).order_by(Trip.started_at.desc()).all()
+  if t.started_at.strftime("%Y-%m")==month
+ ]
+
+ data=[]
+
+ for t in trips:
+  n=d.query(Validation).filter_by(
+   trip_id=t.id,
+   result="VALIDO"
+  ).count()
+
+  data.append({
+   "id":t.id,
+   "started_at":t.started_at,
+   "line":t.line,
+   "direction":t.direction,
+   "device":t.device,
+   "passengers":n,
+   "type":"NFC"
+  })
+
+ # Viagens históricas introduzidas manualmente
+ historical=[
+  h for h in d.query(HistoricalTrip).order_by(
+   HistoricalTrip.started_at.desc()
+  ).all()
+  if h.started_at.strftime("%Y-%m")==month
+ ]
+
+ for h in historical:
+  data.append({
+   "id":h.id,
+   "started_at":h.started_at,
+   "line":h.line,
+   "direction":h.direction,
+   "device":h.device,
+   "passengers":h.passenger_count,
+   "type":"HISTORICO"
+  })
+
+ # Juntar tudo por ordem cronológica
+ data.sort(
+  key=lambda x:x["started_at"],
+  reverse=True
+ )
+
+ d.close()
+
+ return templates.TemplateResponse(
+  "cim.html",
+  {
+   "request":r,
+   "month":month,
+   "data":data
+  }
+ )
 @app.get("/cim/trip/{tid}",response_class=HTMLResponse)
 def detail(tid:int,r:Request):
  if not ok(r,["admin","cim"]):return RedirectResponse("/",303)
