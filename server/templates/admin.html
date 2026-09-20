@@ -294,19 +294,74 @@ Nenhuma viagem histórica registada.
 <table>
 
 <tr>
-<th>Nome</th>
-<th>N.º</th>
-<th>UID NFC</th>
-<th>Validade</th>
+    <th>Nome</th>
+    <th>N.º passe</th>
+    <th>UID NFC</th>
+    <th>Validade</th>
+    <th>Ações</th>
 </tr>
 
 {% for p in passengers %}
 
 <tr>
-<td>{{p.name}}</td>
-<td>{{p.pass_number}}</td>
-<td>{{p.card_uid}}</td>
-<td>{{p.valid_until}}</td>
+
+<form method="post"
+      action="/admin/passenger/{{p.id}}/edit">
+
+<td>
+    <input name="name"
+           value="{{p.name}}"
+           required>
+</td>
+
+<td>
+    <input name="pass_number"
+           value="{{p.pass_number}}"
+           required>
+</td>
+
+<td>
+    <input name="card_uid"
+           value="{{p.card_uid}}"
+           required>
+</td>
+
+<td>
+    <input type="date"
+           name="valid_until"
+           value="{{p.valid_until}}"
+           required>
+</td>
+
+<td>
+
+    <button type="submit">
+        Guardar
+    </button>
+
+</form>
+
+<form method="post"
+      action="/admin/passenger/{{p.id}}/delete"
+      style="display:inline"
+      onsubmit="return confirm('Tem a certeza que pretende eliminar este passe?');">
+
+    <button type="submit">
+        Eliminar
+    </button>
+
+</form>
+
+</td>
+
+</tr>
+
+{% else %}
+
+<tr>
+    <td colspan="5">
+        Nenhum passe registado.
+    </td>
 </tr>
 
 {% endfor %}
