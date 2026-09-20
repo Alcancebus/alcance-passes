@@ -121,6 +121,55 @@ def add_historical_trip(
  d.close()
 
  return RedirectResponse("/admin",303)
+ 
+ @app.post("/admin/historical-trip/{hid}/edit")
+def edit_historical_trip(
+ hid:int,
+ r:Request,
+ trip_date:str=Form(...),
+ trip_time:str=Form(...),
+ line:str=Form(...),
+ direction:str=Form(...),
+ device:str=Form(...),
+ passenger_count:int=Form(...),
+ notes:str=Form("")
+):
+ if not ok(r,["admin"]):
+  return RedirectResponse("/",303)
+
+ d=DB()
+ h=d.get(HistoricalTrip,hid)
+
+ if h:
+  h.started_at=datetime.strptime(
+   trip_date+" "+trip_time,
+   "%Y-%m-%d %H:%M"
+  )
+  h.line=line
+  h.direction=direction
+  h.device=device
+  h.passenger_count=passenger_count
+  h.notes=notes
+  d.commit()
+
+ d.close()
+ return RedirectResponse("/admin",303)
+
+
+@app.post("/admin/historical-trip/{hid}/delete")
+def delete_historical_trip(hid:int,r:Request):
+ if not ok(r,["admin"]):
+  return RedirectResponse("/",303)
+
+ d=DB()
+ h=d.get(HistoricalTrip,hid)
+
+ if h:
+  d.delete(h)
+  d.commit()
+
+ d.close()
+ return RedirectResponse("/admin",303)
 class Start(BaseModel):device:str;line:str;direction:str;token:str
 class Read(BaseModel):trip_id:int;card_uid:str;token:str
 class End(BaseModel):trip_id:int;token:str
