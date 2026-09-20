@@ -116,6 +116,34 @@ def change_admin_password(
   d.close()
 
  return RedirectResponse("/admin?password_changed=1",303)
+ @app.post("/admin/change-cim-password")
+def change_cim_password(
+ r:Request,
+ new_password:str=Form(...),
+ confirm_password:str=Form(...)
+):
+ if not ok(r,["admin"]):
+  return RedirectResponse("/",303)
+
+ if new_password != confirm_password:
+  return RedirectResponse("/admin?cim_password_error=confirm",303)
+
+ if len(new_password) < 10:
+  return RedirectResponse("/admin?cim_password_error=short",303)
+
+ d=DB()
+
+ try:
+  u=d.query(User).filter_by(username="cim").first()
+
+  if u:
+   u.password_hash=crypt.hash(new_password)
+   d.commit()
+
+ finally:
+  d.close()
+
+ return RedirectResponse("/admin?cim_password_changed=1",303)
 @app.get("/admin",response_class=HTMLResponse)
 def admin(r:Request):
  if not ok(r,["admin"]):return RedirectResponse("/",303)
