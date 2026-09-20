@@ -68,7 +68,38 @@ def admin(r:Request):
 def add(r:Request,name:str=Form(...),pass_number:str=Form(...),card_uid:str=Form(...),valid_until:str=Form(...)):
  if not ok(r,["admin"]):return RedirectResponse("/",303)
  d=DB(); d.add(Passenger(name=name,pass_number=pass_number,card_uid=card_uid.upper(),valid_until=valid_until)); d.commit(); d.close();return RedirectResponse("/admin",303)
+@app.post("/admin/historical-trip")
+def add_historical_trip(
+ r:Request,
+ trip_date:str=Form(...),
+ trip_time:str=Form(...),
+ line:str=Form(...),
+ direction:str=Form(...),
+ device:str=Form(...),
+ passenger_count:int=Form(...),
+ notes:str=Form("")
+):
+ if not ok(r,["admin"]):
+  return RedirectResponse("/",303)
 
+ started=datetime.strptime(
+  trip_date+" "+trip_time,
+  "%Y-%m-%d %H:%M"
+ )
+
+ d=DB()
+ d.add(HistoricalTrip(
+  started_at=started,
+  line=line,
+  direction=direction,
+  device=device,
+  passenger_count=passenger_count,
+  notes=notes
+ ))
+ d.commit()
+ d.close()
+
+ return RedirectResponse("/admin",303)
 class Start(BaseModel):device:str;line:str;direction:str;token:str
 class Read(BaseModel):trip_id:int;card_uid:str;token:str
 class End(BaseModel):trip_id:int;token:str
