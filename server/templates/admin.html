@@ -347,6 +347,25 @@ Nenhuma viagem histórica registada.
       onsubmit="return confirm('Tem a certeza que pretende eliminar este passe?');">
 
     <button type="submit">
+        <form method="post"
+      action="/admin/passenger/{{p.id}}/toggle"
+      style="display:inline">
+
+{% if p.active %}
+
+<button type="submit">
+    Bloquear
+</button>
+
+{% else %}
+
+<button type="submit">
+    Desbloquear
+</button>
+
+{% endif %}
+
+</form>
         Eliminar
     </button>
 
