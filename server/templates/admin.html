@@ -298,8 +298,95 @@ Nenhuma viagem histórica registada.
     <th>N.º passe</th>
     <th>UID NFC</th>
     <th>Validade</th>
+    <th>Estado</th>
     <th>Ações</th>
 </tr>
+
+{% for p in passengers %}
+
+<tr>
+
+<form method="post" action="/admin/passenger/{{p.id}}/edit">
+
+<td>
+    <input name="name"
+           value="{{p.name}}"
+           required>
+</td>
+
+<td>
+    <input name="pass_number"
+           value="{{p.pass_number}}"
+           required>
+</td>
+
+<td>
+    <input name="card_uid"
+           value="{{p.card_uid}}"
+           required>
+</td>
+
+<td>
+    <input type="date"
+           name="valid_until"
+           value="{{p.valid_until}}"
+           required>
+</td>
+
+<td>
+    {% if p.active %}
+        <strong style="color:green;">ATIVO</strong>
+    {% else %}
+        <strong style="color:red;">BLOQUEADO</strong>
+    {% endif %}
+</td>
+
+<td>
+
+    <button type="submit">
+        Guardar
+    </button>
+
+</form>
+
+<form method="post"
+      action="/admin/passenger/{{p.id}}/toggle"
+      style="display:inline">
+
+    {% if p.active %}
+        <button type="submit">Bloquear</button>
+    {% else %}
+        <button type="submit">Desbloquear</button>
+    {% endif %}
+
+</form>
+
+<form method="post"
+      action="/admin/passenger/{{p.id}}/delete"
+      style="display:inline"
+      onsubmit="return confirm('Tem a certeza que pretende eliminar este passe?');">
+
+    <button type="submit">
+        Eliminar
+    </button>
+
+</form>
+
+</td>
+
+</tr>
+
+{% else %}
+
+<tr>
+    <td colspan="6">
+        Nenhum passe registado.
+    </td>
+</tr>
+
+{% endfor %}
+
+</table>
 
 {% for p in passengers %}
 
