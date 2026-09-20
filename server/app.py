@@ -122,7 +122,7 @@ def add_historical_trip(
 
  return RedirectResponse("/admin",303)
  
- @app.post("/admin/historical-trip/{hid}/edit")
+@app.post("/admin/historical-trip/{hid}/edit")
 def edit_historical_trip(
  hid:int,
  r:Request,
