@@ -454,7 +454,7 @@ def cim(r:Request,month:str|None=None):
  month=month or date.today().strftime("%Y-%m")
  d=DB()
 
- # Viagens realizadas com validação NFC
+ # Viagens NFC do mês
  trips=[
   t for t in d.query(Trip).order_by(Trip.started_at.desc()).all()
   if t.started_at.strftime("%Y-%m")==month
@@ -478,7 +478,7 @@ def cim(r:Request,month:str|None=None):
    "type":"NFC"
   })
 
- # Viagens históricas introduzidas manualmente
+ # Viagens históricas
  historical=[
   h for h in d.query(HistoricalTrip).order_by(
    HistoricalTrip.started_at.desc()
@@ -497,11 +497,43 @@ def cim(r:Request,month:str|None=None):
    "type":"HISTORICO"
   })
 
- # Juntar tudo por ordem cronológica
  data.sort(
   key=lambda x:x["started_at"],
   reverse=True
  )
+
+ # Utilizações mensais por passe
+ usage=[]
+
+ passengers=d.query(Passenger).order_by(
+  Passenger.pass_number
+ ).all()
+
+ for p in passengers:
+
+  validations=(
+   d.query(Validation,Trip)
+   .join(Trip,Validation.trip_id==Trip.id)
+   .filter(
+    Validation.passenger_id==p.id,
+    Validation.result=="VALIDO"
+   )
+   .all()
+  )
+
+  count=sum(
+   1 for v,t in validations
+   if t.started_at.strftime("%Y-%m")==month
+  )
+
+  # Mostrar apenas passes que tiveram utilização nesse mês
+  if count>0:
+   usage.append({
+    "id":p.id,
+    "pass_number":p.pass_number,
+    "name":p.name,
+    "count":count
+   })
 
  d.close()
 
@@ -510,7 +542,8 @@ def cim(r:Request,month:str|None=None):
   {
    "request":r,
    "month":month,
-   "data":data
+   "data":data,
+   "usage":usage
   }
  )
 @app.get("/cim/trip/{tid}",response_class=HTMLResponse)
