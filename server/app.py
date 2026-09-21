@@ -166,11 +166,7 @@ def change_cim_password(
   d.close()
 
  return RedirectResponse("/admin?cim_password_changed=1",303)
-@app.get("/admin",response_class=HTMLResponse)
-def admin(r:Request):
- if not ok(r,["admin"]):return RedirectResponse("/",303)
- d=DB(); ps=d.query(Passenger).order_by(Passenger.name).all(); d.close()
- return templates.TemplateResponse("admin.html",{"request":r,"passengers":ps})
+
 @app.post("/admin/passenger")
 def add(r:Request,name:str=Form(...),pass_number:str=Form(...),card_uid:str=Form(...),valid_until:str=Form(...)):
  if not ok(r,["admin"]):return RedirectResponse("/",303)
