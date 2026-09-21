@@ -1,3 +1,120 @@
+<!DOCTYPE html>
+<html lang="pt">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+
+<title>Utilizações do Passe - Alcance Bus</title>
+
+<style>
+body{
+    font-family:Arial,sans-serif;
+    margin:30px;
+    background:#f5f6f7;
+    color:#222;
+}
+.container{
+    max-width:1100px;
+    margin:auto;
+    background:white;
+    padding:25px;
+    border-radius:8px;
+}
+.info{
+    background:#f5f5f5;
+    padding:15px;
+    border-radius:6px;
+    margin:20px 0;
+}
+.total{
+    font-size:22px;
+    font-weight:bold;
+}
+table{
+    width:100%;
+    border-collapse:collapse;
+    margin-top:20px;
+}
+th{
+    background:#222;
+    color:white;
+    text-align:left;
+}
+th,td{
+    padding:11px;
+    border:1px solid #ddd;
+}
+tr:nth-child(even){
+    background:#f7f7f7;
+}
+.voltar{
+    display:inline-block;
+    margin-top:20px;
+    padding:9px 14px;
+    background:#0066cc;
+    color:white;
+    text-decoration:none;
+    border-radius:4px;
+}
+</style>
+</head>
+
+<body>
+
+<div class="container">
+
+<h1>Utilizações do Passe</h1>
+<strong>Alcance Bus — Portal CIM do Ave</strong>
+
+<div class="info">
+
+<p>
+<strong>Passageiro:</strong>
+{{ passenger.name }}
+</p>
+
+<p>
+<strong>N.º Passe:</strong>
+{{ passenger.pass_number }}
+</p>
+
+<p>
+<strong>Mês:</strong>
+{{ month }}
+</p>
+
+<p class="total">
+Total de utilizações: {{ total }}
+</p>
+
+</div>
+
+<table>
+
+<thead>
+<tr>
+    <th>Data</th>
+    <th>Hora</th>
+    <th>Linha</th>
+    <th>Sentido</th>
+    <th>Autocarro</th>
+</tr>
+</thead>
+
+<tbody>
+
+{% for v,t in rows %}
+
+<tr>
+    <td>{{ v.timestamp.strftime("%d/%m/%Y") }}</td>
+    <td>{{ v.timestamp.strftime("%H:%M") }}</td>
+    <td>{{ t.line }}</td>
+    <td>{{ t.direction }}</td>
+    <td>{{ t.device }}</td>
+</tr>
+
+{% else %}
+
 <tr>
     <td colspan="5">
         Não existem utilizações deste passe neste mês.
@@ -10,7 +127,7 @@
 
 </table>
 
-<a class="voltar" href="/cim?month={{month}}">
+<a class="voltar" href="/cim?month={{ month }}">
     ← Voltar ao Portal CIM
 </a>
 
