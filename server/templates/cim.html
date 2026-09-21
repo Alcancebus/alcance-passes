@@ -26,7 +26,9 @@ body{
     align-items:center;
     margin-bottom:25px;
 }
-form{margin-bottom:25px;}
+form{
+    margin-bottom:25px;
+}
 input,button{
     padding:9px;
     font-size:15px;
@@ -34,6 +36,7 @@ input,button{
 table{
     width:100%;
     border-collapse:collapse;
+    margin-bottom:35px;
 }
 th{
     background:#222;
@@ -59,8 +62,23 @@ tr:nth-child(even){
     color:#a05a00;
     font-weight:bold;
 }
-a{color:#0066cc;}
-.sair{color:#b00020;}
+.detalhes{
+    display:inline-block;
+    padding:7px 12px;
+    background:#0066cc;
+    color:white;
+    text-decoration:none;
+    border-radius:4px;
+}
+a{
+    color:#0066cc;
+}
+.sair{
+    color:#b00020;
+}
+.separador{
+    margin-top:35px;
+}
 </style>
 </head>
 
@@ -77,6 +95,7 @@ a{color:#0066cc;}
     <a class="sair" href="/logout">Sair</a>
 </div>
 
+
 <form method="get" action="/cim">
 
     <strong>Mês:</strong>
@@ -92,6 +111,64 @@ a{color:#0066cc;}
     </a>
 
 </form>
+
+
+<h2>Utilizações mensais por passe</h2>
+
+<table>
+
+<thead>
+<tr>
+    <th>N.º Passe</th>
+    <th>Nome</th>
+    <th>N.º de utilizações</th>
+    <th>Detalhes</th>
+</tr>
+</thead>
+
+<tbody>
+
+{% for p in usage %}
+
+<tr>
+
+<td>
+    {{p.pass_number}}
+</td>
+
+<td>
+    {{p.name}}
+</td>
+
+<td class="numero">
+    {{p.count}}
+</td>
+
+<td>
+    <a class="detalhes"
+       href="/cim/pass/{{p.id}}?month={{month}}">
+        Mais detalhes
+    </a>
+</td>
+
+</tr>
+
+{% else %}
+
+<tr>
+<td colspan="4">
+    Não existem utilizações de passes registadas neste mês.
+</td>
+</tr>
+
+{% endfor %}
+
+</tbody>
+
+</table>
+
+
+<h2 class="separador">Viagens realizadas</h2>
 
 <table>
 
@@ -113,13 +190,19 @@ a{color:#0066cc;}
 <tr>
 
 <td>
+
 {% if t.type == "NFC" %}
+
     <a href="/cim/trip/{{t.id}}">
         {{t.started_at.strftime("%d/%m/%Y %H:%M")}}
     </a>
+
 {% else %}
+
     {{t.started_at.strftime("%d/%m/%Y %H:%M")}}
+
 {% endif %}
+
 </td>
 
 <td>{{t.line}}</td>
@@ -133,11 +216,19 @@ a{color:#0066cc;}
 </td>
 
 <td>
+
 {% if t.type == "NFC" %}
+
     <span class="nfc">NFC</span>
+
 {% else %}
-    <span class="historico">Manual / Histórico</span>
+
+    <span class="historico">
+        Manual / Histórico
+    </span>
+
 {% endif %}
+
 </td>
 
 </tr>
