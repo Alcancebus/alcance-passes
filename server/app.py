@@ -546,6 +546,53 @@ def cim(r:Request,month:str|None=None):
    "usage":usage
   }
  )
+
+@app.get("/cim/pass/{pid}",response_class=HTMLResponse)
+def cim_pass_detail(
+ pid:int,
+ r:Request,
+ month:str|None=None
+):
+ if not ok(r,["admin","cim"]):
+  return RedirectResponse("/",303)
+
+ month=month or date.today().strftime("%Y-%m")
+ d=DB()
+
+ passenger=d.get(Passenger,pid)
+
+ if not passenger:
+  d.close()
+  raise HTTPException(404,"Passe não encontrado")
+
+ rows=(
+  d.query(Validation,Trip)
+  .join(Trip,Validation.trip_id==Trip.id)
+  .filter(
+   Validation.passenger_id==pid,
+   Validation.result=="VALIDO"
+  )
+  .order_by(Validation.timestamp.desc())
+  .all()
+ )
+
+ rows=[
+  (v,t) for v,t in rows
+  if t.started_at.strftime("%Y-%m")==month
+ ]
+
+ d.close()
+
+ return templates.TemplateResponse(
+  "pass_detail.html",
+  {
+   "request":r,
+   "passenger":passenger,
+   "month":month,
+   "rows":rows,
+   "total":len(rows)
+  }
+ )
 @app.get("/cim/trip/{tid}",response_class=HTMLResponse)
 def detail(tid:int,r:Request):
  if not ok(r,["admin","cim"]):return RedirectResponse("/",303)
