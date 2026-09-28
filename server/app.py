@@ -219,7 +219,7 @@ def edit_passenger(
  return RedirectResponse("/admin",303)
  @app.post("/admin/passenger/{pid}/toggle")
  def toggle_passenger(pid:int,r:Request):
- if not ok(r,["admin"]):
+  if not ok(r,["admin"]):
   return RedirectResponse("/",303)
 
  d=DB()
