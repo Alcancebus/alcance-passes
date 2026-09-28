@@ -1,574 +1,77 @@
-<html lang="pt">
-<head>
-<meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Administração - Alcance Bus</title>
-
-<style>
-body{
-    font-family:Arial,sans-serif;
-    margin:30px;
-    background:#f5f6f7;
-}
-.container{
-    max-width:1200px;
-    margin:auto;
-    background:white;
-    padding:25px;
-    border-radius:8px;
-}
-input,select,button{
-    padding:9px;
-    margin:4px;
-}
-button{
-    cursor:pointer;
-}
-table{
-    width:100%;
-    border-collapse:collapse;
-    margin-top:15px;
-}
-th,td{
-    border:1px solid #ddd;
-    padding:9px;
-}
-th{
-    background:#222;
-    color:white;
-    text-align:left;
-}
-.box{
-    margin-top:30px;
-    padding:20px;
-    background:#f5f5f5;
-    border-radius:8px;
-}
-</style>
-</head>
-
-<body>
-
-<div class="container">
-
-<h1>Administração Alcance Bus</h1>
-
-<a href="/cim">Portal CIM</a> |
-<a href="/logout">Sair</a>
-<div class="box">
-
-<h2>Segurança</h2>
-<h3>Alterar palavra-passe de Administrador</h3>
-
+Administração Alcance Bus
+Portal CIM | Sair
+Segurança
+Alterar palavra-passe de Administrador
 {% if request.query_params.get("password_changed") %}
-<p style="color:green;font-weight:bold;">
 Palavra-passe alterada com sucesso.
-</p>
-{% endif %}
 
-{% if request.query_params.get("password_error") == "current" %}
-<p style="color:red;">
+{% endif %} {% if request.query_params.get("password_error") == "current" %}
 A palavra-passe atual está incorreta.
-</p>
-{% endif %}
 
-{% if request.query_params.get("password_error") == "confirm" %}
-<p style="color:red;">
+{% endif %} {% if request.query_params.get("password_error") == "confirm" %}
 As novas palavras-passe não coincidem.
-</p>
-{% endif %}
 
-{% if request.query_params.get("password_error") == "short" %}
-<p style="color:red;">
+{% endif %} {% if request.query_params.get("password_error") == "short" %}
 A nova palavra-passe deve ter pelo menos 10 caracteres.
-</p>
+
 {% endif %}
-
-<form method="post" action="/admin/change-password">
-
-<input type="password"
-       name="current_password"
-       placeholder="Palavra-passe atual"
-       required>
-
-<input type="password"
-       name="new_password"
-       placeholder="Nova palavra-passe"
-       minlength="10"
-       required>
-
-<input type="password"
-       name="confirm_password"
-       placeholder="Confirmar nova palavra-passe"
-       minlength="10"
-       required>
-
-<button type="submit">
-Alterar palavra-passe
-</button>
-
-</form>
-<hr style="margin:25px 0;">
-
-<h3>Alterar palavra-passe do Portal CIM</h3>
-
+Palavra-passe atual
+ 
+Nova palavra-passe
+ 
+Confirmar nova palavra-passe
+ Alterar palavra-passe
+Alterar palavra-passe do Portal CIM
 {% if request.query_params.get("cim_password_changed") %}
-<p style="color:green;font-weight:bold;">
 Palavra-passe da CIM alterada com sucesso.
-</p>
-{% endif %}
 
-{% if request.query_params.get("cim_password_error") == "confirm" %}
-<p style="color:red;">
+{% endif %} {% if request.query_params.get("cim_password_error") == "confirm" %}
 As novas palavras-passe da CIM não coincidem.
-</p>
-{% endif %}
 
-{% if request.query_params.get("cim_password_error") == "short" %}
-<p style="color:red;">
+{% endif %} {% if request.query_params.get("cim_password_error") == "short" %}
 A palavra-passe da CIM deve ter pelo menos 10 caracteres.
-</p>
-{% endif %}
-
-<form method="post" action="/admin/change-cim-password">
-
-<input type="password"
-       name="new_password"
-       placeholder="Nova palavra-passe CIM"
-       minlength="10"
-       required>
-
-<input type="password"
-       name="confirm_password"
-       placeholder="Confirmar palavra-passe CIM"
-       minlength="10"
-       required>
-
-<button type="submit">
-Alterar palavra-passe CIM
-</button>
-
-</form>
-</div>
-<h2>Novo passe</h2>
-
-<form method="post" action="/admin/passenger">
-
-<input name="name"
-       placeholder="Nome"
-       required>
-
-<input name="pass_number"
-       placeholder="N.º passe"
-       required>
-
-<input name="card_uid"
-       placeholder="UID NFC"
-       required>
-
-<input type="date"
-       name="valid_until"
-       required>
-
-<button type="submit">
-Criar passe
-</button>
-
-</form>
-
-
-<div class="box">
-
-<h2>Registar viagem histórica</h2>
-
-<p>
-Use esta opção para registar serviços realizados antes da utilização
-da validação NFC.
-</p>
-
-<form method="post" action="/admin/historical-trip">
-
-<label>Data:</label>
-<input type="date"
-       name="trip_date"
-       required>
-
-<label>Hora:</label>
-<input type="time"
-       name="trip_time"
-       required>
-
-<br>
-
-<label>Linha:</label>
-
-<select name="line" required>
-
-<option value="Linha 1 - Santa Marta - São Pedro - Rossas">
-Linha 1 — Santa Marta - São Pedro - Rossas
-</option>
-
-<option value="Linha 2 - Anjos - Agra - Rossas">
-Linha 2 — Anjos - Agra - Rossas
-</option>
-
-</select>
-
-<label>Sentido:</label>
-
-<select name="direction" required>
-<option value="Ida">Ida</option>
-<option value="Volta">Volta</option>
-</select>
-
-<br>
-
-<input name="device"
-       placeholder="Autocarro / matrícula"
-       required>
-
-<input type="number"
-       name="passenger_count"
-       min="0"
-       placeholder="N.º passageiros"
-       required>
-
-<br>
-
-<input name="notes"
-       style="width:500px"
-       placeholder="Observação (opcional)">
-
-<button type="submit">
-Registar viagem histórica
-</button>
-
-</form>
-<hr style="margin:25px 0;">
-
-<h3>Importar histórico por CSV</h3>
-
-<p>
-Pode importar várias viagens de uma só vez através de um ficheiro CSV.
-</p>
-
-<form method="post"
-      action="/admin/historical-trip/import"
-      enctype="multipart/form-data">
-
-    <input type="file"
-           name="file"
-           accept=".csv"
-           required>
-
-    <button type="submit">
-        Importar CSV
-    </button>
-
-</form>
-
-<p style="font-size:13px;color:#666;">
-Formato: Data;Hora;Linha;Sentido;Autocarro;Passageiros;Observação
-</p>
-</div>
-<h2>Viagens históricas registadas</h2>
-
-<table>
-<tr>
-    <th>Data / Hora</th>
-    <th>Linha</th>
-    <th>Sentido</th>
-    <th>Autocarro</th>
-    <th>Passageiros</th>
-    <th>Observação</th>
-    <th>Ações</th>
-</tr>
-
-{% for h in historical %}
-
-<tr>
-<form method="post" action="/admin/historical-trip/{{h.id}}/edit">
-
-<td>
-    <input type="date"
-           name="trip_date"
-           value="{{h.started_at.strftime('%Y-%m-%d')}}"
-           required>
-
-    <input type="time"
-           name="trip_time"
-           value="{{h.started_at.strftime('%H:%M')}}"
-           required>
-</td>
-
-<td>
-<select name="line" required>
-
-<option value="Linha 1 - Santa Marta - São Pedro - Rossas"
-{% if h.line == "Linha 1 - Santa Marta - São Pedro - Rossas" %}selected{% endif %}>
-Linha 1 — Santa Marta - São Pedro - Rossas
-</option>
-
-<option value="Linha 2 - Anjos - Agra - Rossas"
-{% if h.line == "Linha 2 - Anjos - Agra - Rossas" %}selected{% endif %}>
-Linha 2 — Anjos - Agra - Rossas
-</option>
-
-</select>
-</td>
-
-<td>
-<select name="direction">
-<option value="Ida"
-{% if h.direction == "Ida" %}selected{% endif %}>
-Ida
-</option>
-
-<option value="Volta"
-{% if h.direction == "Volta" %}selected{% endif %}>
-Volta
-</option>
-</select>
-</td>
-
-<td>
-<input name="device"
-       value="{{h.device}}"
-       required>
-</td>
-
-<td>
-<input type="number"
-       name="passenger_count"
-       min="0"
-       value="{{h.passenger_count}}"
-       style="width:70px"
-       required>
-</td>
-
-<td>
-<input name="notes"
-       value="{{h.notes or ''}}">
-</td>
-
-<td>
-<button type="submit">
-Guardar
-</button>
-
-</form>
-
-<form method="post"
-      action="/admin/historical-trip/{{h.id}}/delete"
-      onsubmit="return confirm('Tem a certeza que pretende apagar esta viagem histórica?');">
-
-<button type="submit">
-Apagar
-</button>
-
-</form>
-</td>
-
-</tr>
-
-{% else %}
-
-<tr>
-<td colspan="7">
-Nenhuma viagem histórica registada.
-</td>
-</tr>
-
-{% endfor %}
-
-</table>
-
-<h2>Passes</h2>
-
-<table>
-
-<tr>
-    <th>Nome</th>
-    <th>N.º passe</th>
-    <th>UID NFC</th>
-    <th>Validade</th>
-    <th>Estado</th>
-    <th>Ações</th>
-</tr>
-
-{% for p in passengers %}
-
-<tr>
-
-<form method="post" action="/admin/passenger/{{p.id}}/edit">
-
-<td>
-    <input name="name"
-           value="{{p.name}}"
-           required>
-</td>
-
-<td>
-    <input name="pass_number"
-           value="{{p.pass_number}}"
-           required>
-</td>
-
-<td>
-    <input name="card_uid"
-           value="{{p.card_uid}}"
-           required>
-</td>
-
-<td>
-    <input type="date"
-           name="valid_until"
-           value="{{p.valid_until}}"
-           required>
-</td>
-
-<td>
-    {% if p.active %}
-        <strong style="color:green;">ATIVO</strong>
-    {% else %}
-        <strong style="color:red;">BLOQUEADO</strong>
-    {% endif %}
-</td>
-
-<td>
-
-    <button type="submit">
-        Guardar
-    </button>
-
-</form>
-
-<form method="post"
-      action="/admin/passenger/{{p.id}}/toggle"
-      style="display:inline">
-
-    {% if p.active %}
-        <button type="submit">Bloquear</button>
-    {% else %}
-        <button type="submit">Desbloquear</button>
-    {% endif %}
-
-</form>
-
-<form method="post"
-      action="/admin/passenger/{{p.id}}/delete"
-      style="display:inline"
-      onsubmit="return confirm('Tem a certeza que pretende eliminar este passe?');">
-
-    <button type="submit">
-        Eliminar
-    </button>
-
-</form>
-
-</td>
-
-</tr>
-
-{% else %}
-
-<tr>
-    <td colspan="6">
-        Nenhum passe registado.
-    </td>
-</tr>
-
-{% endfor %}
-
-</table>
-
-{% for p in passengers %}
-
-<tr>
-
-<form method="post"
-      action="/admin/passenger/{{p.id}}/edit">
-
-<td>
-    <input name="name"
-           value="{{p.name}}"
-           required>
-</td>
-
-<td>
-    <input name="pass_number"
-           value="{{p.pass_number}}"
-           required>
-</td>
-
-<td>
-    <input name="card_uid"
-           value="{{p.card_uid}}"
-           required>
-</td>
-
-<td>
-    <input type="date"
-           name="valid_until"
-           value="{{p.valid_until}}"
-           required>
-</td>
-
-<td>
-
-    <button type="submit">
-        Guardar
-    </button>
-
-</form>
-
-<form method="post"
-      action="/admin/passenger/{{p.id}}/delete"
-      style="display:inline"
-      onsubmit="return confirm('Tem a certeza que pretende eliminar este passe?');">
-
-    <button type="submit">
-        <form method="post"
-      action="/admin/passenger/{{p.id}}/toggle"
-      style="display:inline">
-
-{% if p.active %}
-
-<button type="submit">
-    Bloquear
-</button>
-
-{% else %}
-
-<button type="submit">
-    Desbloquear
-</button>
 
 {% endif %}
+Nova palavra-passe CIM
+ 
+Confirmar palavra-passe CIM
+ Alterar palavra-passe CIM
+Novo passe
+Nome
+ 
+N.º passe
+ 
+UID NFC
+ 
+dd/mm/aaaa
+ Criar passe
+Relatórios mensais CIM
+Importe aqui os relatórios Excel do modelo oficial da CIM. Os relatórios antigos ficam identificados como MANUAL. Os relatórios futuros gerados pelas validações SUNMI ficarão identificados como AUTOMÁTICO.
 
-</form>
-        Eliminar
-    </button>
+{% if request.query_params.get("cim_imported") %}
+Relatório CIM importado com sucesso: {{ request.query_params.get("cim_imported") }} registos — mês {{ request.query_params.get("cim_month") }}.
 
-</form>
+{% endif %}
+Nenhum ficheiro selecionado Importar Excel CIM
+O sistema identifica automaticamente o ano e o mês existentes no ficheiro. Não permite importar duas vezes o mesmo mês.
 
-</td>
+Passes
+{% for p in passengers %} {% else %} {% endfor %}
+Nome	N.º passe	UID NFC	Validade	Estado	Ações
+{{p.name}}
+{{p.pass_number}}
+{{p.card_uid}}
 
-</tr>
-
-{% else %}
-
-<tr>
-    <td colspan="5">
-        Nenhum passe registado.
-    </td>
-</tr>
-
-{% endfor %}
-
-</table>
-
-</div>
-
-</body>
-</html>
+dd/mm/aaaa
+{% if p.active %} ATIVO {% else %} BLOQUEADO {% endif %}	Guardar {% if p.active %} Bloquear {% else %} Desbloquear {% endif %} Eliminar
+Nenhum passe registado.
+{% for p in passengers %}
+{{p.name}}
+ 
+{{p.pass_number}}
+ 
+{{p.card_uid}}
+ 
+dd/mm/aaaa
+ Guardar
+{% if p.active %}Bloquear {% else %} Desbloquear {% endif %} Eliminar {% else %} Nenhum passe registado. {% endfor %}
