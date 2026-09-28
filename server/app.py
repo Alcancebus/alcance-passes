@@ -217,7 +217,7 @@ def edit_passenger(
 
  d.close()
  return RedirectResponse("/admin",303)
-@app.post("/admin/passenger/{pid}/toggle")
+ @app.post("/admin/passenger/{pid}/toggle")
 def toggle_passenger(pid:int,r:Request):
  if not ok(r,["admin"]):
   return RedirectResponse("/",303)
@@ -336,7 +336,7 @@ def delete_historical_trip(hid:int,r:Request):
 
  d.close()
  return RedirectResponse("/admin",303)
-@app.post("/admin/historical-trip/import")
+ @app.post("/admin/historical-trip/import")
 async def import_historical_trips(
  r:Request,
  file:UploadFile=File(...)
