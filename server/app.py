@@ -440,6 +440,40 @@ async def import_historical_trips(
   )
 
 class Start(BaseModel):device:str;line:str;direction:str;token:str
+@app.post("/admin/cim-report/upload-test")
+async def cim_report_upload_test(
+ r:Request,
+ file:UploadFile=File(...)
+):
+ if not ok(r,["admin"]):
+  return RedirectResponse("/",303)
+
+ print("CIM UPLOAD TEST: pedido recebido", flush=True)
+
+ try:
+  raw=await file.read()
+  size=len(raw)
+  print(
+   f"CIM UPLOAD TEST: ficheiro recebido - {file.filename} - {size} bytes",
+   flush=True
+  )
+
+  return RedirectResponse(
+   f"/admin?cim_upload_test=ok&cim_upload_size={size}",
+   303
+  )
+
+ except Exception as e:
+  print(
+   "CIM UPLOAD TEST: ERRO - "+repr(e),
+   flush=True
+  )
+  raise HTTPException(
+   400,
+   "Erro no teste de upload: "+str(e)
+  )
+
+
 @app.post("/admin/cim-report/import")
 async def import_cim_report(
  r:Request,
@@ -448,16 +482,21 @@ async def import_cim_report(
  if not ok(r,["admin"]):
   return RedirectResponse("/",303)
 
+ d=None
  try:
   raw=await file.read()
+
+  # read_only evita carregar toda a formatação do modelo CIM em memória.
   wb=openpyxl.load_workbook(
    BytesIO(raw),
-   data_only=True
+   data_only=True,
+   read_only=True
   )
 
   sheet_name="CIM_AT - ANO_MÊS - Com NIF"
 
   if sheet_name not in wb.sheetnames:
+   wb.close()
    raise HTTPException(
     400,
     "O Excel não contém a folha esperada da CIM."
@@ -465,9 +504,6 @@ async def import_cim_report(
 
   ws=wb[sheet_name]
 
-  # No modelo CIM que estamos a usar:
-  # B6 = ano
-  # B7 = mês
   year_value=ws["B6"].value
   month_value=ws["B7"].value
 
@@ -490,6 +526,7 @@ async def import_cim_report(
   try:
    year=int(year_value)
   except:
+   wb.close()
    raise HTTPException(
     400,
     "Não foi possível identificar o ano do relatório."
@@ -498,6 +535,7 @@ async def import_cim_report(
   month_text=str(month_value or "").strip().upper()
 
   if month_text not in months:
+   wb.close()
    raise HTTPException(
     400,
     "Não foi possível identificar o mês do relatório."
@@ -507,84 +545,86 @@ async def import_cim_report(
 
   d=DB()
 
-  try:
-   # Impede duplicar o mesmo relatório mensal.
-   existing=d.query(CIMReport).filter(
-    CIMReport.year==year,
-    CIMReport.month==month
-   ).first()
+  existing=d.query(CIMReport).filter(
+   CIMReport.year==year,
+   CIMReport.month==month
+  ).first()
 
-   if existing:
-    raise HTTPException(
-     400,
-     f"Já existe um relatório CIM para {month_text} de {year}."
-    )
-
-   report=CIMReport(
-    year=year,
-    month=month,
-    source="MANUAL",
-    source_file=file.filename
+  if existing:
+   wb.close()
+   raise HTTPException(
+    400,
+    f"Já existe um relatório CIM para {month_text} de {year}."
    )
 
-   d.add(report)
-   d.flush()
+  report=CIMReport(
+   year=year,
+   month=month,
+   source="MANUAL",
+   source_file=file.filename
+  )
+  d.add(report)
+  d.flush()
 
-   imported=0
+  imported=0
+  empty_streak=0
 
-   # Os beneficiários começam na linha 13.
-   for row in range(13,ws.max_row+1):
+  # Lê apenas E:O e termina após 25 linhas consecutivas sem NIF/nome.
+  # max_row=5000 é uma proteção adicional contra folhas formatadas até ao fim.
+  for values in ws.iter_rows(
+   min_row=13,
+   max_row=5000,
+   min_col=5,
+   max_col=15,
+   values_only=True
+  ):
+   nif=values[0]
+   name=values[1]
 
-    nif=ws.cell(row,5).value
-    name=ws.cell(row,6).value
+   if not nif and not name:
+    empty_streak+=1
+    if empty_streak>=25:
+     break
+    continue
 
-    # Ignorar linhas vazias.
-    if not nif and not name:
-     continue
+   empty_streak=0
 
-    title=ws.cell(row,8).value
-    pvp=ws.cell(row,9).value
-    origin=ws.cell(row,10).value
-    destination=ws.cell(row,11).value
-    school=ws.cell(row,12).value
+   title=values[3]
+   pvp=values[4]
+   origin=values[5]
+   destination=values[6]
+   school=values[7]
+   validations_value=values[8]
+   compensation=values[10]
 
-    validations_value=ws.cell(row,13).value
-    compensation=ws.cell(row,15).value
+   try:
+    validations=int(validations_value or 0)
+   except:
+    validations=0
 
-    try:
-     validations=int(validations_value or 0)
-    except:
-     validations=0
+   d.add(CIMReportRow(
+    report_id=report.id,
+    nif=str(nif).strip() if nif is not None else None,
+    name=str(name).strip() if name is not None else "",
+    title=str(title).strip() if title is not None else None,
+    pvp=str(pvp).strip() if pvp is not None else None,
+    origin=str(origin).strip() if origin is not None else None,
+    destination=str(destination).strip() if destination is not None else None,
+    school=str(school).strip() if school is not None else None,
+    validations=validations,
+    compensation=str(compensation).strip() if compensation is not None else None
+   ))
+   imported+=1
 
-    d.add(CIMReportRow(
-     report_id=report.id,
-     nif=str(nif).strip() if nif is not None else None,
-     name=str(name).strip() if name is not None else "",
-     title=str(title).strip() if title is not None else None,
-     pvp=str(pvp).strip() if pvp is not None else None,
-     origin=str(origin).strip() if origin is not None else None,
-     destination=str(destination).strip() if destination is not None else None,
-     school=str(school).strip() if school is not None else None,
-     validations=validations,
-     compensation=str(compensation).strip() if compensation is not None else None
-    ))
+  wb.close()
 
-    imported+=1
+  if imported==0:
+   raise HTTPException(
+    400,
+    "O relatório não contém beneficiários para importar."
+   )
 
-   if imported==0:
-    raise HTTPException(
-     400,
-     "O relatório não contém beneficiários para importar."
-    )
-
-   d.commit()
-
-  except:
-   d.rollback()
-   raise
-
-  finally:
-   d.close()
+  d.commit()
 
   return RedirectResponse(
    f"/admin?cim_imported={imported}&cim_month={year}-{month:02d}",
@@ -592,13 +632,22 @@ async def import_cim_report(
   )
 
  except HTTPException:
+  if d is not None:
+   d.rollback()
   raise
 
  except Exception as e:
+  if d is not None:
+   d.rollback()
   raise HTTPException(
    400,
    "Erro ao importar relatório CIM: "+str(e)
   )
+
+ finally:
+  if d is not None:
+   d.close()
+
 class Read(BaseModel):trip_id:int;card_uid:str;token:str
 class End(BaseModel):trip_id:int;token:str
 
