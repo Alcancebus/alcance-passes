@@ -28,75 +28,89 @@ input,select,button{padding:9px;margin:4px}button{cursor:pointer}table{width:100
 
 <div class="box"><h2>Novo passe</h2><form method="post" action="/admin/passenger">
 <input name="name" placeholder="Nome" required><input name="pass_number" placeholder="N.º passe" required><input name="card_uid" placeholder="UID NFC" required><input type="date" name="valid_until" required>
-<select name="line" class="line-select" required onchange="updateStops(this)"><option value="">Linha</option><option value="Linha 1">Linha 1</option><option value="Linha 2">Linha 2</option></select>
-<select name="stop" class="stop-select" required onchange="updateFare(this)"><option value="">Escolha primeiro a linha</option></select>
-<span class="fare-display fare"></span><button type="submit">Criar passe</button></form>
+
+<select name="route_choice" required onchange="syncRoute(this)">
+<option value="">Linha e paragem</option>
+<optgroup label="Linha 1">
+<option value="Linha 1|Figueiró">Figueiró — Zona 9-12 — 50,90 €</option>
+<option value="Linha 1|Santa Marinha">Santa Marinha — Zona 9-12 — 50,90 €</option>
+<option value="Linha 1|Santa Marta">Santa Marta — Zona 9-12 — 50,90 €</option>
+<option value="Linha 1|Pombal">Pombal — Zona 5-8 — 40,35 €</option>
+<option value="Linha 1|Santinha">Santinha — Zona 5-8 — 40,35 €</option>
+<option value="Linha 1|Souto">Souto — Zona 5-8 — 40,35 €</option>
+<option value="Linha 1|Igreja">Igreja — Zona 5-8 — 40,35 €</option>
+<option value="Linha 1|Bairro">Bairro — Zona 5-8 — 40,35 €</option>
+<option value="Linha 1|Covelo">Covelo — Zona 5-8 — 40,35 €</option>
+<option value="Linha 1|Arroteia">Arroteia — Zona 0-4 — 28,30 €</option>
+<option value="Linha 1|Politeito">Politeito — Zona 0-4 — 28,30 €</option>
+<option value="Linha 1|São Pedro">São Pedro — Zona 0-4 — 28,30 €</option>
+<option value="Linha 1|Rossas">Rossas — Destino final</option>
+</optgroup>
+<optgroup label="Linha 2">
+<option value="Linha 2|Anjos">Anjos — Zona 13-16 — 62,90 €</option>
+<option value="Linha 2|Agra">Agra — Zona 9-12 — 50,90 €</option>
+<option value="Linha 2|Calvos - Penedo">Calvos - Penedo — Zona 5-8 — 40,35 €</option>
+<option value="Linha 2|Calvos - Cruzeiro">Calvos - Cruzeiro — Zona 5-8 — 40,35 €</option>
+<option value="Linha 2|Calvos - Reta">Calvos - Reta — Zona 5-8 — 40,35 €</option>
+<option value="Linha 2|Ortezelo">Ortezelo — Zona 0-4 — 28,30 €</option>
+<option value="Linha 2|Rossas">Rossas — Destino final</option>
+</optgroup>
+</select>
+<input type="hidden" name="line" value="">
+<input type="hidden" name="stop" value="">
+<button type="submit">Criar passe</button></form>
 <p class="small">Escolha a linha e a paragem. A zona e o PVP de referência são determinados automaticamente. O PVP é apenas o título de referência; a compensação mensal será calculada pelo número de validações.</p></div>
 
 <h2>Passes</h2><table><tr><th>Nome</th><th>N.º passe</th><th>UID NFC</th><th>Validade</th><th>Linha</th><th>Paragem</th><th>Zona / PVP referência</th><th>Estado</th><th>Ações</th></tr>
 {% for p in passengers %}
 <tr><td><form method="post" action="/admin/passenger/{{p.id}}/edit"><input name="name" value="{{p.name}}" required></td>
 <td><input name="pass_number" value="{{p.pass_number}}" required></td><td><input name="card_uid" value="{{p.card_uid}}" required></td><td><input type="date" name="valid_until" value="{{p.valid_until}}" required></td>
-<td><select name="line" class="line-select" required onchange="updateStops(this)" data-current-stop="{{p.stop or ''}}"><option value="">Linha</option><option value="Linha 1" {% if p.line=="Linha 1" %}selected{% endif %}>Linha 1</option><option value="Linha 2" {% if p.line=="Linha 2" %}selected{% endif %}>Linha 2</option></select></td>
-<td><select name="stop" class="stop-select" required onchange="updateFare(this)"></select></td>
+<td colspan="2">
+<select name="route_choice" required onchange="syncRoute(this)">
+<option value="">Linha e paragem</option>
+<optgroup label="Linha 1">
+<option value="Linha 1|Figueiró" {% if p.line=="Linha 1" and p.stop=="Figueiró" %}selected{% endif %}>Figueiró — Zona 9-12 — 50,90 €</option>
+<option value="Linha 1|Santa Marinha" {% if p.line=="Linha 1" and p.stop=="Santa Marinha" %}selected{% endif %}>Santa Marinha — Zona 9-12 — 50,90 €</option>
+<option value="Linha 1|Santa Marta" {% if p.line=="Linha 1" and p.stop=="Santa Marta" %}selected{% endif %}>Santa Marta — Zona 9-12 — 50,90 €</option>
+<option value="Linha 1|Pombal" {% if p.line=="Linha 1" and p.stop=="Pombal" %}selected{% endif %}>Pombal — Zona 5-8 — 40,35 €</option>
+<option value="Linha 1|Santinha" {% if p.line=="Linha 1" and p.stop=="Santinha" %}selected{% endif %}>Santinha — Zona 5-8 — 40,35 €</option>
+<option value="Linha 1|Souto" {% if p.line=="Linha 1" and p.stop=="Souto" %}selected{% endif %}>Souto — Zona 5-8 — 40,35 €</option>
+<option value="Linha 1|Igreja" {% if p.line=="Linha 1" and p.stop=="Igreja" %}selected{% endif %}>Igreja — Zona 5-8 — 40,35 €</option>
+<option value="Linha 1|Bairro" {% if p.line=="Linha 1" and p.stop=="Bairro" %}selected{% endif %}>Bairro — Zona 5-8 — 40,35 €</option>
+<option value="Linha 1|Covelo" {% if p.line=="Linha 1" and p.stop=="Covelo" %}selected{% endif %}>Covelo — Zona 5-8 — 40,35 €</option>
+<option value="Linha 1|Arroteia" {% if p.line=="Linha 1" and p.stop=="Arroteia" %}selected{% endif %}>Arroteia — Zona 0-4 — 28,30 €</option>
+<option value="Linha 1|Politeito" {% if p.line=="Linha 1" and p.stop=="Politeito" %}selected{% endif %}>Politeito — Zona 0-4 — 28,30 €</option>
+<option value="Linha 1|São Pedro" {% if p.line=="Linha 1" and p.stop=="São Pedro" %}selected{% endif %}>São Pedro — Zona 0-4 — 28,30 €</option>
+<option value="Linha 1|Rossas" {% if p.line=="Linha 1" and p.stop=="Rossas" %}selected{% endif %}>Rossas — Destino final</option>
+</optgroup>
+<optgroup label="Linha 2">
+<option value="Linha 2|Anjos" {% if p.line=="Linha 2" and p.stop=="Anjos" %}selected{% endif %}>Anjos — Zona 13-16 — 62,90 €</option>
+<option value="Linha 2|Agra" {% if p.line=="Linha 2" and p.stop=="Agra" %}selected{% endif %}>Agra — Zona 9-12 — 50,90 €</option>
+<option value="Linha 2|Calvos - Penedo" {% if p.line=="Linha 2" and p.stop=="Calvos - Penedo" %}selected{% endif %}>Calvos - Penedo — Zona 5-8 — 40,35 €</option>
+<option value="Linha 2|Calvos - Cruzeiro" {% if p.line=="Linha 2" and p.stop=="Calvos - Cruzeiro" %}selected{% endif %}>Calvos - Cruzeiro — Zona 5-8 — 40,35 €</option>
+<option value="Linha 2|Calvos - Reta" {% if p.line=="Linha 2" and p.stop=="Calvos - Reta" %}selected{% endif %}>Calvos - Reta — Zona 5-8 — 40,35 €</option>
+<option value="Linha 2|Ortezelo" {% if p.line=="Linha 2" and p.stop=="Ortezelo" %}selected{% endif %}>Ortezelo — Zona 0-4 — 28,30 €</option>
+<option value="Linha 2|Rossas" {% if p.line=="Linha 2" and p.stop=="Rossas" %}selected{% endif %}>Rossas — Destino final</option>
+</optgroup>
+</select>
+<input type="hidden" name="line" value="{{p.line or ''}}">
+<input type="hidden" name="stop" value="{{p.stop or ''}}">
+</td>
 <td><span class="fare-display fare">{% if p.fare_zone %}{% if p.fare_zone=="DESTINO" %}Destino final{% else %}Zona {{p.fare_zone}} — {{fare_pvp.get(p.fare_zone,"")}}{% endif %}{% else %}Por definir{% endif %}</span></td>
 <td>{% if p.active %}<strong style="color:green;">ATIVO</strong>{% else %}<strong style="color:red;">BLOQUEADO</strong>{% endif %}</td>
 <td><button type="submit">Guardar</button></form><form method="post" action="/admin/passenger/{{p.id}}/toggle" style="display:inline">{% if p.active %}<button type="submit">Bloquear</button>{% else %}<button type="submit">Desbloquear</button>{% endif %}</form><form method="post" action="/admin/passenger/{{p.id}}/delete" style="display:inline" onsubmit="return confirm('Tem a certeza que pretende eliminar este passe?');"><button type="submit">Eliminar</button></form></td></tr>
 {% else %}<tr><td colspan="9">Nenhum passe registado.</td></tr>{% endfor %}</table></div>
 
 <script>
-const STOP_ZONES = {
-  "Linha 1": {
-    "Figueiró":"9-12",
-    "Santa Marinha":"9-12",
-    "Santa Marta":"9-12",
-    "Pombal":"5-8",
-    "Santinha":"5-8",
-    "Souto":"5-8",
-    "Igreja":"5-8",
-    "Bairro":"5-8",
-    "Covelo":"5-8",
-    "Arroteia":"0-4",
-    "Politeito":"0-4",
-    "São Pedro":"0-4",
-    "Rossas":"DESTINO"
-  },
-  "Linha 2": {
-    "Anjos":"13-16",
-    "Agra":"9-12",
-    "Calvos - Penedo":"5-8",
-    "Calvos - Cruzeiro":"5-8",
-    "Calvos - Reta":"5-8",
-    "Ortezelo":"0-4",
-    "Rossas":"DESTINO"
-  }
-};
-
-const FARE_PVP = {
-  "0-4":"28,30 €",
-  "5-8":"40,35 €",
-  "9-12":"50,90 €",
-  "13-16":"62,90 €"
-};
-function updateStops(lineSelect){
- const form=lineSelect.closest("form"), stopSelect=form.querySelector(".stop-select");
- const current=lineSelect.dataset.currentStop || stopSelect.value || "";
- const stops=STOP_ZONES[lineSelect.value] || {};
- stopSelect.innerHTML='<option value="">Paragem</option>';
- Object.keys(stops).forEach(stop=>{const o=document.createElement("option");o.value=stop;o.textContent=stop;if(stop===current)o.selected=true;stopSelect.appendChild(o);});
- lineSelect.dataset.currentStop="";
- updateFare(stopSelect);
-}
-function updateFare(stopSelect){
- const form=stopSelect.closest("form"), line=form.querySelector(".line-select").value;
- const zone=(STOP_ZONES[line]||{})[stopSelect.value], out=form.querySelector(".fare-display");
- if(!out)return;
- if(!zone){out.textContent="";return;}
- out.textContent=zone==="DESTINO"?"Destino final":"Zona "+zone+" — "+(FARE_PVP[zone]||"");
+function syncRoute(select){
+  const form = select.closest("form");
+  const parts = select.value.split("|");
+  form.querySelector('input[name="line"]').value = parts[0] || "";
+  form.querySelector('input[name="stop"]').value = parts[1] || "";
 }
 document.addEventListener("DOMContentLoaded", () => {
-  document.querySelectorAll(".line-select").forEach(lineSelect => {
-    updateStops(lineSelect);
+  document.querySelectorAll('select[name="route_choice"]').forEach(select => {
+    if (select.value) syncRoute(select);
   });
 });
 </script></body></html>
