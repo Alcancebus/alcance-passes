@@ -45,8 +45,39 @@ input,select,button{padding:9px;margin:4px}button{cursor:pointer}table{width:100
 {% else %}<tr><td colspan="9">Nenhum passe registado.</td></tr>{% endfor %}</table></div>
 
 <script>
-const STOP_ZONES={{ stop_zones|tojson }};
-const FARE_PVP={{ fare_pvp|tojson }};
+const STOP_ZONES = {
+  "Linha 1": {
+    "Figueiró":"9-12",
+    "Santa Marinha":"9-12",
+    "Santa Marta":"9-12",
+    "Pombal":"5-8",
+    "Santinha":"5-8",
+    "Souto":"5-8",
+    "Igreja":"5-8",
+    "Bairro":"5-8",
+    "Covelo":"5-8",
+    "Arroteia":"0-4",
+    "Politeito":"0-4",
+    "São Pedro":"0-4",
+    "Rossas":"DESTINO"
+  },
+  "Linha 2": {
+    "Anjos":"13-16",
+    "Agra":"9-12",
+    "Calvos - Penedo":"5-8",
+    "Calvos - Cruzeiro":"5-8",
+    "Calvos - Reta":"5-8",
+    "Ortezelo":"0-4",
+    "Rossas":"DESTINO"
+  }
+};
+
+const FARE_PVP = {
+  "0-4":"28,30 €",
+  "5-8":"40,35 €",
+  "9-12":"50,90 €",
+  "13-16":"62,90 €"
+};
 function updateStops(lineSelect){
  const form=lineSelect.closest("form"), stopSelect=form.querySelector(".stop-select");
  const current=lineSelect.dataset.currentStop || stopSelect.value || "";
@@ -63,5 +94,9 @@ function updateFare(stopSelect){
  if(!zone){out.textContent="";return;}
  out.textContent=zone==="DESTINO"?"Destino final":"Zona "+zone+" — "+(FARE_PVP[zone]||"");
 }
-document.addEventListener("DOMContentLoaded",()=>document.querySelectorAll(".line-select").forEach(updateStops));
+document.addEventListener("DOMContentLoaded", () => {
+  document.querySelectorAll(".line-select").forEach(lineSelect => {
+    updateStops(lineSelect);
+  });
+});
 </script></body></html>
