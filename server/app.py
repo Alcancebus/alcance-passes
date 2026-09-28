@@ -141,7 +141,6 @@ def change_admin_password(
 
  if new_password != confirm_password:
   return RedirectResponse("/admin?password_error=confirm",303)
-
  if len(new_password) < 10:
   return RedirectResponse("/admin?password_error=short",303)
 
