@@ -105,54 +105,18 @@ th{
 </div>
 
 <div class="box">
-<h2>Teste de upload CIM</h2>
-
-<p>
-Este teste recebe o ficheiro mas não abre o Excel e não grava nada na base de dados.
-Serve apenas para verificar se o upload chega ao servidor.
-</p>
-
-{% if request.query_params.get("cim_upload_test") == "ok" %}
-<p style="color:green;font-weight:bold;">
-Upload recebido com sucesso pelo servidor.
-Tamanho recebido: {{ request.query_params.get("cim_upload_size") }} bytes.
-</p>
-{% endif %}
-
-<form method="post"
-      action="/admin/cim-report/upload-test"
-      enctype="multipart/form-data">
-<input type="file" name="file" accept=".xlsx" required>
-<button type="submit">Testar upload do Excel</button>
-</form>
-</div>
-
-<div class="box">
 <h2>Relatórios mensais CIM</h2>
-
-<p>
-Importe aqui os relatórios Excel do modelo oficial da CIM.
-Os relatórios históricos importados ficam identificados como <strong>MANUAL</strong>.
-Os relatórios futuros gerados a partir das validações SUNMI ficarão identificados como
-<strong>AUTOMÁTICO</strong>.
-</p>
-
-{% if request.query_params.get("cim_imported") %}
-<p style="color:green;font-weight:bold;">
-Relatório CIM importado com sucesso:
-{{ request.query_params.get("cim_imported") }} registos
-— mês {{ request.query_params.get("cim_month") }}.
-</p>
-{% endif %}
-
-<form method="post" action="/admin/cim-report/import" enctype="multipart/form-data">
-<input type="file" name="file" accept=".xlsx" required>
-<button type="submit">Importar Excel CIM</button>
-</form>
-
-<p style="font-size:13px;color:#666;">
-O sistema identifica automaticamente o ano e o mês do ficheiro e impede a importação duplicada do mesmo mês.
-</p>
+<p>Os relatórios históricos ficam identificados como <strong>MANUAL</strong>. Os futuros gerados pelas SUNMI ficarão como <strong>AUTOMÁTICO</strong>.</p>
+{% if request.query_params.get("cim_imported") %}<p style="color:green;font-weight:bold;">Relatório CIM importado com sucesso: {{ request.query_params.get("cim_imported") }} registos — mês {{ request.query_params.get("cim_month") }}.</p>{% endif %}
+{% if request.query_params.get("cim_replaced") %}<p style="color:green;font-weight:bold;">Relatório CIM substituído com sucesso: {{ request.query_params.get("cim_replaced") }} registos — mês {{ request.query_params.get("cim_month") }}.</p>{% endif %}
+<h3>Importar novo relatório</h3>
+<form method="post" action="/admin/cim-report/import" enctype="multipart/form-data"><input type="hidden" name="replace" value="0"><input type="file" name="file" accept=".xlsx" required><button type="submit">Importar novo relatório</button></form>
+<p style="font-size:13px;color:#666;">Para meses que ainda não existem. Os duplicados continuam bloqueados.</p>
+<hr style="margin:25px 0;">
+<h3>Substituir relatório existente</h3>
+<p>Carrega a versão corrigida de um mês já existente e substitui os registos desse mês.</p>
+<form method="post" action="/admin/cim-report/import" enctype="multipart/form-data" onsubmit="return confirm('Tem a certeza de que pretende substituir o relatório deste mês pelos dados do Excel selecionado?');"><input type="hidden" name="replace" value="1"><input type="file" name="file" accept=".xlsx" required><button type="submit">Substituir relatório existente</button></form>
+<p style="font-size:13px;color:#a05a00;font-weight:bold;">Confirme que selecionou o Excel corrigido do mês pretendido.</p>
 </div>
 
 <div class="box">
