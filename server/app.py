@@ -1,5 +1,5 @@
 import os,csv
-from io import StringIO
+from io import StringIO,BytesIO
 import openpyxl
 from datetime import datetime,date
 from fastapi import FastAPI,Request,Form,HTTPException,UploadFile,File
@@ -217,9 +217,9 @@ def edit_passenger(
 
  d.close()
  return RedirectResponse("/admin",303)
- @app.post("/admin/passenger/{pid}/toggle")
- def toggle_passenger(pid:int,r:Request):
-  if not ok(r,["admin"]):
+@app.post("/admin/passenger/{pid}/toggle")
+def toggle_passenger(pid:int,r:Request):
+ if not ok(r,["admin"]):
   return RedirectResponse("/",303)
 
  d=DB()
@@ -336,7 +336,7 @@ def delete_historical_trip(hid:int,r:Request):
 
  d.close()
  return RedirectResponse("/admin",303)
- @app.post("/admin/historical-trip/import")
+@app.post("/admin/historical-trip/import")
 async def import_historical_trips(
  r:Request,
  file:UploadFile=File(...)
@@ -440,7 +440,7 @@ async def import_historical_trips(
   )
 
 class Start(BaseModel):device:str;line:str;direction:str;token:str
- @app.post("/admin/cim-report/import")
+@app.post("/admin/cim-report/import")
 async def import_cim_report(
  r:Request,
  file:UploadFile=File(...)
