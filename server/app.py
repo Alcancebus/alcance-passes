@@ -22,7 +22,16 @@ templates=Jinja2Templates(directory="templates"); DEVICE_TOKEN=os.getenv("DEVICE
 class User(Base):
  __tablename__="users"; id=Column(Integer,primary_key=True); username=Column(String,unique=True); password_hash=Column(String); role=Column(String)
 class Passenger(Base):
- __tablename__="passengers"; id=Column(Integer,primary_key=True); name=Column(String); pass_number=Column(String,unique=True); card_uid=Column(String,unique=True); valid_until=Column(String); active=Column(Boolean,default=True)
+ __tablename__="passengers"
+ id=Column(Integer,primary_key=True)
+ name=Column(String)
+ pass_number=Column(String,unique=True)
+ card_uid=Column(String,unique=True)
+ valid_until=Column(String)
+ active=Column(Boolean,default=True)
+ line=Column(String,nullable=True)
+ stop=Column(String,nullable=True)
+ fare_zone=Column(String,nullable=True)
 class Trip(Base):
  __tablename__="trips"; id=Column(Integer,primary_key=True); device=Column(String); line=Column(String); direction=Column(String); started_at=Column(DateTime,default=datetime.now); ended_at=Column(DateTime,nullable=True)
 class HistoricalTrip(Base):
@@ -60,6 +69,20 @@ class CIMReportRow(Base):
  validations=Column(Integer,default=0)
  compensation=Column(String,nullable=True)
 Base.metadata.create_all(engine)
+
+def ensure_passenger_columns():
+ with engine.begin() as conn:
+  if engine.dialect.name=="postgresql":
+   conn.exec_driver_sql("ALTER TABLE passengers ADD COLUMN IF NOT EXISTS line VARCHAR")
+   conn.exec_driver_sql("ALTER TABLE passengers ADD COLUMN IF NOT EXISTS stop VARCHAR")
+   conn.exec_driver_sql("ALTER TABLE passengers ADD COLUMN IF NOT EXISTS fare_zone VARCHAR")
+  elif engine.dialect.name=="sqlite":
+   cols={row[1] for row in conn.exec_driver_sql("PRAGMA table_info(passengers)").fetchall()}
+   if "line" not in cols: conn.exec_driver_sql("ALTER TABLE passengers ADD COLUMN line VARCHAR")
+   if "stop" not in cols: conn.exec_driver_sql("ALTER TABLE passengers ADD COLUMN stop VARCHAR")
+   if "fare_zone" not in cols: conn.exec_driver_sql("ALTER TABLE passengers ADD COLUMN fare_zone VARCHAR")
+
+ensure_passenger_columns()
 def seed():
  d=DB()
  try:
@@ -119,7 +142,9 @@ def admin(r:Request):
   {
    "request":r,
    "passengers":ps,
-   "historical":historical
+   "historical":historical,
+   "stop_zones":STOP_ZONES,
+   "fare_pvp":FARE_PVP
   }
  )
 @app.post("/login")
@@ -189,34 +214,44 @@ def change_cim_password(
 
  return RedirectResponse("/admin?cim_password_changed=1",303)
 
+FARE_PVP={"0-4":"28,30 €","5-8":"40,35 €","9-12":"50,90 €","13-16":"62,90 €"}
+STOP_ZONES={
+ "Linha 1":{
+  "Figueiró":"9-12","Santa Marinha":"9-12","Santa Marta":"9-12",
+  "Pombal":"5-8","Santinha":"5-8","Souto":"5-8","Igreja":"5-8","Bairro":"5-8","Covelo":"5-8",
+  "Arroteia":"0-4","Politeito":"0-4","São Pedro":"0-4","Rossas":"DESTINO"
+ },
+ "Linha 2":{
+  "Anjos":"13-16","Agra":"9-12","Calvos - Penedo":"5-8","Calvos - Cruzeiro":"5-8",
+  "Calvos - Reta":"5-8","Ortezelo":"0-4","Rossas":"DESTINO"
+ }
+}
+def passenger_zone(line,stop):
+ zone=STOP_ZONES.get(line,{}).get(stop)
+ if not zone: raise HTTPException(400,"Paragem inválida para a linha selecionada.")
+ return zone
+
 @app.post("/admin/passenger")
-def add(r:Request,name:str=Form(...),pass_number:str=Form(...),card_uid:str=Form(...),valid_until:str=Form(...)):
- if not ok(r,["admin"]):return RedirectResponse("/",303)
- d=DB(); d.add(Passenger(name=name,pass_number=pass_number,card_uid=card_uid.upper(),valid_until=valid_until)); d.commit(); d.close();return RedirectResponse("/admin",303)
-@app.post("/admin/passenger/{pid}/edit")
-def edit_passenger(
- pid:int,
- r:Request,
- name:str=Form(...),
- pass_number:str=Form(...),
- card_uid:str=Form(...),
- valid_until:str=Form(...)
-):
- if not ok(r,["admin"]):
-  return RedirectResponse("/",303)
-
+def add(r:Request,name:str=Form(...),pass_number:str=Form(...),card_uid:str=Form(...),valid_until:str=Form(...),line:str=Form(...),stop:str=Form(...)):
+ if not ok(r,["admin"]): return RedirectResponse("/",303)
+ zone=passenger_zone(line,stop)
  d=DB()
- p=d.get(Passenger,pid)
+ d.add(Passenger(name=name.strip(),pass_number=pass_number.strip(),card_uid=card_uid.strip().upper(),valid_until=valid_until,line=line,stop=stop,fare_zone=zone))
+ d.commit(); d.close()
+ return RedirectResponse("/admin",303)
 
+@app.post("/admin/passenger/{pid}/edit")
+def edit_passenger(pid:int,r:Request,name:str=Form(...),pass_number:str=Form(...),card_uid:str=Form(...),valid_until:str=Form(...),line:str=Form(...),stop:str=Form(...)):
+ if not ok(r,["admin"]): return RedirectResponse("/",303)
+ zone=passenger_zone(line,stop)
+ d=DB(); p=d.get(Passenger,pid)
  if p:
-  p.name=name.strip()
-  p.pass_number=pass_number.strip()
-  p.card_uid=card_uid.strip().upper()
-  p.valid_until=valid_until
+  p.name=name.strip(); p.pass_number=pass_number.strip(); p.card_uid=card_uid.strip().upper()
+  p.valid_until=valid_until; p.line=line; p.stop=stop; p.fare_zone=zone
   d.commit()
-
  d.close()
  return RedirectResponse("/admin",303)
+
 @app.post("/admin/passenger/{pid}/toggle")
 def toggle_passenger(pid:int,r:Request):
  if not ok(r,["admin"]):
