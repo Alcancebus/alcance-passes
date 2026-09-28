@@ -475,238 +475,56 @@ async def cim_report_upload_test(
 
 
 @app.post("/admin/cim-report/import")
-async def import_cim_report(
- r:Request,
- file:UploadFile=File(...)
-):
- if not ok(r,["admin"]):
-  return RedirectResponse("/",303)
-
- d=None
- wb=None
-
+async def import_cim_report(r:Request,file:UploadFile=File(...)):
+ if not ok(r,["admin"]): return RedirectResponse("/",303)
+ d=None; wb=None
  try:
-  import time
-  print("CIM IMPORT 1/7: pedido recebido", flush=True)
-
   raw=await file.read()
-  print(
-   f"CIM IMPORT 2/7: upload lido - {file.filename} - {len(raw)} bytes",
-   flush=True
-  )
-
-  t0=time.monotonic()
-  wb=openpyxl.load_workbook(
-   BytesIO(raw),
-   data_only=True,
-   read_only=True
-  )
-  print(
-   f"CIM IMPORT 3/7: Excel aberto em {time.monotonic()-t0:.2f}s",
-   flush=True
-  )
-
+  wb=openpyxl.load_workbook(BytesIO(raw),data_only=True,read_only=True)
   sheet_name="CIM_AT - ANO_MÊS - Com NIF"
-  if sheet_name not in wb.sheetnames:
-   raise HTTPException(
-    400,
-    "O Excel não contém a folha esperada da CIM."
-   )
-
+  if sheet_name not in wb.sheetnames: raise HTTPException(400,"O Excel não contém a folha esperada da CIM.")
   ws=wb[sheet_name]
-  print("CIM IMPORT 4/7: folha CIM localizada", flush=True)
-
-  months={
-   "JANEIRO":1,"FEVEREIRO":2,"MARÇO":3,"MARCO":3,
-   "ABRIL":4,"MAIO":5,"JUNHO":6,"JULHO":7,
-   "AGOSTO":8,"SETEMBRO":9,"OUTUBRO":10,
-   "NOVEMBRO":11,"DEZEMBRO":12
-  }
-
-  # No ficheiro oficial analisado, C/D das linhas de dados contêm
-  # o ano e o mês corretos. É mais fiável do que B6/B7 desta folha.
-  year_value=ws["C13"].value
-  month_value=ws["D13"].value
-
-  # Fallback: a folha RESUMO tem B6=ano e B7=mês.
+  months={"JANEIRO":1,"FEVEREIRO":2,"MARÇO":3,"MARCO":3,"ABRIL":4,"MAIO":5,"JUNHO":6,"JULHO":7,"AGOSTO":8,"SETEMBRO":9,"OUTUBRO":10,"NOVEMBRO":11,"DEZEMBRO":12}
+  year_value=ws["C13"].value; month_value=ws["D13"].value
   if year_value is None or month_value is None:
-   resumo_name="RESUMO ANO_MÊS - CIM"
-   if resumo_name in wb.sheetnames:
-    resumo=wb[resumo_name]
-    year_value=resumo["B6"].value
-    month_value=resumo["B7"].value
-
-  try:
-   year=int(year_value)
-  except:
-   raise HTTPException(
-    400,
-    "Não foi possível identificar o ano do relatório."
-   )
-
+   if "RESUMO ANO_MÊS - CIM" in wb.sheetnames:
+    resumo=wb["RESUMO ANO_MÊS - CIM"]; year_value=resumo["B6"].value; month_value=resumo["B7"].value
+  try: year=int(year_value)
+  except: raise HTTPException(400,"Não foi possível identificar o ano do relatório.")
   month_text=str(month_value or "").strip().upper()
-  if month_text not in months:
-   raise HTTPException(
-    400,
-    "Não foi possível identificar o mês do relatório."
-   )
-
-  month=months[month_text]
-  print(
-   f"CIM IMPORT: período identificado - {month_text} {year}",
-   flush=True
-  )
-
-  rows=[]
-  empty_streak=0
-  t1=time.monotonic()
-
-  # Estrutura real do modelo CIM "Com NIF":
-  # E=NIF, F=Nome, H=Designação, I=PVP, J=Origem,
-  # K=Destino, L=Estabelecimento, M=Bilhética,
-  # N=Estimativa sem bilhética, O=Compensação.
-  for values in ws.iter_rows(
-   min_row=13,
-   max_row=500,
-   min_col=5,
-   max_col=15,
-   values_only=True
-  ):
-   nif=values[0]
-   name=values[1]
-
+  if month_text not in months: raise HTTPException(400,"Não foi possível identificar o mês do relatório.")
+  month=months[month_text]; rows=[]; empty_streak=0
+  def to_int(v):
+   if v is None or v=="": return 0
+   try: return int(float(v))
+   except: return 0
+  for values in ws.iter_rows(min_row=13,max_row=500,min_col=5,max_col=15,values_only=True):
+   nif,name=values[0],values[1]
    if not nif and not name:
     empty_streak+=1
-    if empty_streak>=10:
-     break
+    if empty_streak>=10: break
     continue
-
    empty_streak=0
-
-   bilhetica=values[8]   # coluna M
-   estimativa=values[9]  # coluna N
-
-   def to_int(v):
-    if v is None or v=="":
-     return 0
-    try:
-     return int(float(v))
-    except:
-     return 0
-
-   # Para os meses históricos pode estar preenchida a estimativa (N)
-   # em vez da bilhética (M). Guardamos o total de utilizações reportadas.
-   validations=to_int(bilhetica)+to_int(estimativa)
-
-   compensation=values[10]  # coluna O
-   if compensation is None:
-    # Se a fórmula não tiver valor em cache, usa o PVP conforme a regra
-    # definida para estes relatórios.
-    compensation=values[4]
-
-   rows.append({
-    "nif": str(nif).strip() if nif is not None else None,
-    "name": str(name).strip() if name is not None else "",
-    "title": str(values[3]).strip() if values[3] is not None else None,
-    "pvp": str(values[4]).strip() if values[4] is not None else None,
-    "origin": str(values[5]).strip() if values[5] is not None else None,
-    "destination": str(values[6]).strip() if values[6] is not None else None,
-    "school": str(values[7]).strip() if values[7] is not None else None,
-    "validations": validations,
-    "compensation": str(compensation).strip() if compensation is not None else None
-   })
-
-  print(
-   f"CIM IMPORT 5/7: {len(rows)} registos lidos em {time.monotonic()-t1:.2f}s",
-   flush=True
-  )
-
-  wb.close()
-  wb=None
-
-  if not rows:
-   raise HTTPException(
-    400,
-    "O relatório não contém beneficiários para importar."
-   )
-
+   compensation=values[10] if values[10] is not None else values[4]
+   rows.append({"nif":str(nif).strip() if nif is not None else None,"name":str(name).strip() if name is not None else "","title":str(values[3]).strip() if values[3] is not None else None,"pvp":str(values[4]).strip() if values[4] is not None else None,"origin":str(values[5]).strip() if values[5] is not None else None,"destination":str(values[6]).strip() if values[6] is not None else None,"school":str(values[7]).strip() if values[7] is not None else None,"validations":to_int(values[8])+to_int(values[9]),"compensation":str(compensation).strip() if compensation is not None else None})
+  wb.close(); wb=None
+  if not rows: raise HTTPException(400,"O relatório não contém beneficiários para importar.")
   d=DB()
-
-  existing=d.query(CIMReport).filter(
-   CIMReport.year==year,
-   CIMReport.month==month
-  ).first()
-
-  if existing:
-   raise HTTPException(
-    400,
-    f"Já existe um relatório CIM para {month_text} de {year}."
-   )
-
-  report=CIMReport(
-   year=year,
-   month=month,
-   source="MANUAL",
-   source_file=file.filename
-  )
-  d.add(report)
-  d.flush()
-
-  print("CIM IMPORT 6/7: a gravar na base de dados", flush=True)
-  t2=time.monotonic()
-
-  objects=[
-   CIMReportRow(
-    report_id=report.id,
-    nif=x["nif"],
-    name=x["name"],
-    title=x["title"],
-    pvp=x["pvp"],
-    origin=x["origin"],
-    destination=x["destination"],
-    school=x["school"],
-    validations=x["validations"],
-    compensation=x["compensation"]
-   )
-   for x in rows
-  ]
-
-  d.bulk_save_objects(objects)
-  d.commit()
-
-  print(
-   f"CIM IMPORT 7/7: concluído - {len(rows)} registos - BD {time.monotonic()-t2:.2f}s",
-   flush=True
-  )
-
-  return RedirectResponse(
-   f"/admin?cim_imported={len(rows)}&cim_month={year}-{month:02d}",
-   303
-  )
-
- except HTTPException as e:
-  if d is not None:
-   d.rollback()
-  print(f"CIM IMPORT: HTTP ERROR - {e.detail}", flush=True)
+  if d.query(CIMReport).filter(CIMReport.year==year,CIMReport.month==month).first(): raise HTTPException(400,f"Já existe um relatório CIM para {month_text} de {year}.")
+  report=CIMReport(year=year,month=month,source="MANUAL",source_file=file.filename); d.add(report); d.flush()
+  d.bulk_save_objects([CIMReportRow(report_id=report.id,**x) for x in rows]); d.commit()
+  return RedirectResponse(f"/admin?cim_imported={len(rows)}&cim_month={year}-{month:02d}",303)
+ except HTTPException:
+  if d is not None: d.rollback()
   raise
-
  except Exception as e:
-  if d is not None:
-   d.rollback()
-  print("CIM IMPORT: ERRO - "+repr(e), flush=True)
-  raise HTTPException(
-   400,
-   "Erro ao importar relatório CIM: "+str(e)
-  )
-
+  if d is not None: d.rollback()
+  raise HTTPException(400,"Erro ao importar relatório CIM: "+str(e))
  finally:
   if wb is not None:
-   try:
-    wb.close()
-   except:
-    pass
-  if d is not None:
-   d.close()
+   try: wb.close()
+   except: pass
+  if d is not None: d.close()
 
 class Read(BaseModel):trip_id:int;card_uid:str;token:str
 class End(BaseModel):trip_id:int;token:str
@@ -738,104 +556,29 @@ def end(x:End):
 
 @app.get("/cim",response_class=HTMLResponse)
 def cim(r:Request,month:str|None=None):
- if not ok(r,["admin","cim"]):
-  return RedirectResponse("/",303)
-
+ if not ok(r,["admin","cim"]): return RedirectResponse("/",303)
  month=month or date.today().strftime("%Y-%m")
+ try: year,month_number=map(int,month.split("-"))
+ except:
+  year=date.today().year; month_number=date.today().month; month=f"{year:04d}-{month_number:02d}"
  d=DB()
-
- # Viagens NFC do mês
- trips=[
-  t for t in d.query(Trip).order_by(Trip.started_at.desc()).all()
-  if t.started_at.strftime("%Y-%m")==month
- ]
-
+ report=d.query(CIMReport).filter(CIMReport.year==year,CIMReport.month==month_number).first()
+ report_rows=[]; report_total_validations=0
+ if report:
+  report_rows=d.query(CIMReportRow).filter(CIMReportRow.report_id==report.id).order_by(CIMReportRow.name).all()
+  report_total_validations=sum(int(x.validations or 0) for x in report_rows)
+ trips=[t for t in d.query(Trip).order_by(Trip.started_at.desc()).all() if t.started_at.strftime("%Y-%m")==month]
  data=[]
-
  for t in trips:
-  n=d.query(Validation).filter_by(
-   trip_id=t.id,
-   result="VALIDO"
-  ).count()
-
-  data.append({
-   "id":t.id,
-   "started_at":t.started_at,
-   "line":t.line,
-   "direction":t.direction,
-   "device":t.device,
-   "passengers":n,
-   "type":"NFC"
-  })
-
- # Viagens históricas
- historical=[
-  h for h in d.query(HistoricalTrip).order_by(
-   HistoricalTrip.started_at.desc()
-  ).all()
-  if h.started_at.strftime("%Y-%m")==month
- ]
-
- for h in historical:
-  data.append({
-   "id":h.id,
-   "started_at":h.started_at,
-   "line":h.line,
-   "direction":h.direction,
-   "device":h.device,
-   "passengers":h.passenger_count,
-   "type":"HISTORICO"
-  })
-
- data.sort(
-  key=lambda x:x["started_at"],
-  reverse=True
- )
-
- # Utilizações mensais por passe
+  n=d.query(Validation).filter_by(trip_id=t.id,result="VALIDO").count()
+  data.append({"id":t.id,"started_at":t.started_at,"line":t.line,"direction":t.direction,"device":t.device,"passengers":n,"type":"NFC"})
  usage=[]
-
- passengers=d.query(Passenger).order_by(
-  Passenger.pass_number
- ).all()
-
- for p in passengers:
-
-  validations=(
-   d.query(Validation,Trip)
-   .join(Trip,Validation.trip_id==Trip.id)
-   .filter(
-    Validation.passenger_id==p.id,
-    Validation.result=="VALIDO"
-   )
-   .all()
-  )
-
-  count=sum(
-   1 for v,t in validations
-   if t.started_at.strftime("%Y-%m")==month
-  )
-
-  # Mostrar apenas passes que tiveram utilização nesse mês
-  if count>0:
-   usage.append({
-    "id":p.id,
-    "pass_number":p.pass_number,
-    "name":p.name,
-    "count":count
-   })
-
+ for p in d.query(Passenger).order_by(Passenger.pass_number).all():
+  vals=d.query(Validation,Trip).join(Trip,Validation.trip_id==Trip.id).filter(Validation.passenger_id==p.id,Validation.result=="VALIDO").all()
+  count=sum(1 for v,t in vals if t.started_at.strftime("%Y-%m")==month)
+  if count>0: usage.append({"id":p.id,"pass_number":p.pass_number,"name":p.name,"count":count})
  d.close()
-
- return templates.TemplateResponse(
-  "cim.html",
-  {
-   "request":r,
-   "month":month,
-   "data":data,
-   "usage":usage
-  }
- )
+ return templates.TemplateResponse("cim.html",{"request":r,"month":month,"report":report,"report_rows":report_rows,"report_total_validations":report_total_validations,"data":data,"usage":usage})
 
 @app.get("/cim/pass/{pid}",response_class=HTMLResponse)
 def cim_pass_detail(
