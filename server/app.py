@@ -1,5 +1,6 @@
 import os,csv
 from io import StringIO
+import openpyxl
 from datetime import datetime,date
 from fastapi import FastAPI,Request,Form,HTTPException,UploadFile,File
 from fastapi.responses import HTMLResponse,RedirectResponse,StreamingResponse
@@ -440,6 +441,165 @@ async def import_historical_trips(
   )
 
 class Start(BaseModel):device:str;line:str;direction:str;token:str
+ @app.post("/admin/cim-report/import")
+async def import_cim_report(
+ r:Request,
+ file:UploadFile=File(...)
+):
+ if not ok(r,["admin"]):
+  return RedirectResponse("/",303)
+
+ try:
+  raw=await file.read()
+  wb=openpyxl.load_workbook(
+   BytesIO(raw),
+   data_only=True
+  )
+
+  sheet_name="CIM_AT - ANO_MÊS - Com NIF"
+
+  if sheet_name not in wb.sheetnames:
+   raise HTTPException(
+    400,
+    "O Excel não contém a folha esperada da CIM."
+   )
+
+  ws=wb[sheet_name]
+
+  # No modelo CIM que estamos a usar:
+  # B6 = ano
+  # B7 = mês
+  year_value=ws["B6"].value
+  month_value=ws["B7"].value
+
+  months={
+   "JANEIRO":1,
+   "FEVEREIRO":2,
+   "MARÇO":3,
+   "MARCO":3,
+   "ABRIL":4,
+   "MAIO":5,
+   "JUNHO":6,
+   "JULHO":7,
+   "AGOSTO":8,
+   "SETEMBRO":9,
+   "OUTUBRO":10,
+   "NOVEMBRO":11,
+   "DEZEMBRO":12
+  }
+
+  try:
+   year=int(year_value)
+  except:
+   raise HTTPException(
+    400,
+    "Não foi possível identificar o ano do relatório."
+   )
+
+  month_text=str(month_value or "").strip().upper()
+
+  if month_text not in months:
+   raise HTTPException(
+    400,
+    "Não foi possível identificar o mês do relatório."
+   )
+
+  month=months[month_text]
+
+  d=DB()
+
+  try:
+   # Impede duplicar o mesmo relatório mensal.
+   existing=d.query(CIMReport).filter(
+    CIMReport.year==year,
+    CIMReport.month==month
+   ).first()
+
+   if existing:
+    raise HTTPException(
+     400,
+     f"Já existe um relatório CIM para {month_text} de {year}."
+    )
+
+   report=CIMReport(
+    year=year,
+    month=month,
+    source="MANUAL",
+    source_file=file.filename
+   )
+
+   d.add(report)
+   d.flush()
+
+   imported=0
+
+   # Os beneficiários começam na linha 13.
+   for row in range(13,ws.max_row+1):
+
+    nif=ws.cell(row,5).value
+    name=ws.cell(row,6).value
+
+    # Ignorar linhas vazias.
+    if not nif and not name:
+     continue
+
+    title=ws.cell(row,8).value
+    pvp=ws.cell(row,9).value
+    origin=ws.cell(row,10).value
+    destination=ws.cell(row,11).value
+    school=ws.cell(row,12).value
+
+    validations_value=ws.cell(row,13).value
+    compensation=ws.cell(row,15).value
+
+    try:
+     validations=int(validations_value or 0)
+    except:
+     validations=0
+
+    d.add(CIMReportRow(
+     report_id=report.id,
+     nif=str(nif).strip() if nif is not None else None,
+     name=str(name).strip() if name is not None else "",
+     title=str(title).strip() if title is not None else None,
+     pvp=str(pvp).strip() if pvp is not None else None,
+     origin=str(origin).strip() if origin is not None else None,
+     destination=str(destination).strip() if destination is not None else None,
+     school=str(school).strip() if school is not None else None,
+     validations=validations,
+     compensation=str(compensation).strip() if compensation is not None else None
+    ))
+
+    imported+=1
+
+   if imported==0:
+    raise HTTPException(
+     400,
+     "O relatório não contém beneficiários para importar."
+    )
+
+   d.commit()
+
+  except:
+   d.rollback()
+   raise
+
+  finally:
+   d.close()
+
+  return RedirectResponse(
+   f"/admin?cim_imported={imported}&cim_month={year}-{month:02d}",
+   303
+  )
+
+ except HTTPException:
+  raise
+
+ except Exception as e:
+  raise HTTPException(
+   400,
+   "Erro ao importar relatório CIM: "+str(e)
+  )
 class Read(BaseModel):trip_id:int;card_uid:str;token:str
 class End(BaseModel):trip_id:int;token:str
 
