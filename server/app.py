@@ -36,6 +36,28 @@ class HistoricalTrip(Base):
  created_at=Column(DateTime,default=datetime.now)
 class Validation(Base):
  __tablename__="validations"; id=Column(Integer,primary_key=True); trip_id=Column(Integer,ForeignKey("trips.id")); passenger_id=Column(Integer,ForeignKey("passengers.id"),nullable=True); card_uid=Column(String); result=Column(String); timestamp=Column(DateTime,default=datetime.now)
+class CIMReport(Base):
+ __tablename__="cim_reports"
+ id=Column(Integer,primary_key=True)
+ year=Column(Integer)
+ month=Column(Integer)
+ source=Column(String)  # MANUAL ou AUTOMATICO
+ source_file=Column(String,nullable=True)
+ created_at=Column(DateTime,default=datetime.now)
+
+class CIMReportRow(Base):
+ __tablename__="cim_report_rows"
+ id=Column(Integer,primary_key=True)
+ report_id=Column(Integer,ForeignKey("cim_reports.id"))
+ nif=Column(String,nullable=True)
+ name=Column(String)
+ title=Column(String,nullable=True)
+ pvp=Column(String,nullable=True)
+ origin=Column(String,nullable=True)
+ destination=Column(String,nullable=True)
+ school=Column(String,nullable=True)
+ validations=Column(Integer,default=0)
+ compensation=Column(String,nullable=True)
 Base.metadata.create_all(engine)
 def seed():
  d=DB()
