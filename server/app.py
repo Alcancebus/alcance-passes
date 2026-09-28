@@ -486,6 +486,7 @@ async def import_cim_report(
  wb=None
 
  try:
+  import time
   print("CIM IMPORT 1/7: pedido recebido", flush=True)
 
   raw=await file.read()
@@ -494,23 +495,18 @@ async def import_cim_report(
    flush=True
   )
 
-  # Nesta fase medimos explicitamente quanto demora o openpyxl a abrir o XLSX.
-  import time
   t0=time.monotonic()
-
   wb=openpyxl.load_workbook(
    BytesIO(raw),
    data_only=True,
    read_only=True
   )
-
   print(
    f"CIM IMPORT 3/7: Excel aberto em {time.monotonic()-t0:.2f}s",
    flush=True
   )
 
   sheet_name="CIM_AT - ANO_MÊS - Com NIF"
-
   if sheet_name not in wb.sheetnames:
    raise HTTPException(
     400,
@@ -520,15 +516,25 @@ async def import_cim_report(
   ws=wb[sheet_name]
   print("CIM IMPORT 4/7: folha CIM localizada", flush=True)
 
-  year_value=ws["B6"].value
-  month_value=ws["B7"].value
-
   months={
    "JANEIRO":1,"FEVEREIRO":2,"MARÇO":3,"MARCO":3,
    "ABRIL":4,"MAIO":5,"JUNHO":6,"JULHO":7,
    "AGOSTO":8,"SETEMBRO":9,"OUTUBRO":10,
    "NOVEMBRO":11,"DEZEMBRO":12
   }
+
+  # No ficheiro oficial analisado, C/D das linhas de dados contêm
+  # o ano e o mês corretos. É mais fiável do que B6/B7 desta folha.
+  year_value=ws["C13"].value
+  month_value=ws["D13"].value
+
+  # Fallback: a folha RESUMO tem B6=ano e B7=mês.
+  if year_value is None or month_value is None:
+   resumo_name="RESUMO ANO_MÊS - CIM"
+   if resumo_name in wb.sheetnames:
+    resumo=wb[resumo_name]
+    year_value=resumo["B6"].value
+    month_value=resumo["B7"].value
 
   try:
    year=int(year_value)
@@ -546,15 +552,22 @@ async def import_cim_report(
    )
 
   month=months[month_text]
+  print(
+   f"CIM IMPORT: período identificado - {month_text} {year}",
+   flush=True
+  )
 
-  # Primeiro recolhemos os dados em memória; ainda não abrimos a BD.
   rows=[]
   empty_streak=0
   t1=time.monotonic()
 
+  # Estrutura real do modelo CIM "Com NIF":
+  # E=NIF, F=Nome, H=Designação, I=PVP, J=Origem,
+  # K=Destino, L=Estabelecimento, M=Bilhética,
+  # N=Estimativa sem bilhética, O=Compensação.
   for values in ws.iter_rows(
    min_row=13,
-   max_row=5000,
+   max_row=500,
    min_col=5,
    max_col=15,
    values_only=True
@@ -564,17 +577,32 @@ async def import_cim_report(
 
    if not nif and not name:
     empty_streak+=1
-    if empty_streak>=25:
+    if empty_streak>=10:
      break
     continue
 
    empty_streak=0
 
-   validations_value=values[8]
-   try:
-    validations=int(validations_value or 0)
-   except:
-    validations=0
+   bilhetica=values[8]   # coluna M
+   estimativa=values[9]  # coluna N
+
+   def to_int(v):
+    if v is None or v=="":
+     return 0
+    try:
+     return int(float(v))
+    except:
+     return 0
+
+   # Para os meses históricos pode estar preenchida a estimativa (N)
+   # em vez da bilhética (M). Guardamos o total de utilizações reportadas.
+   validations=to_int(bilhetica)+to_int(estimativa)
+
+   compensation=values[10]  # coluna O
+   if compensation is None:
+    # Se a fórmula não tiver valor em cache, usa o PVP conforme a regra
+    # definida para estes relatórios.
+    compensation=values[4]
 
    rows.append({
     "nif": str(nif).strip() if nif is not None else None,
@@ -585,7 +613,7 @@ async def import_cim_report(
     "destination": str(values[6]).strip() if values[6] is not None else None,
     "school": str(values[7]).strip() if values[7] is not None else None,
     "validations": validations,
-    "compensation": str(values[10]).strip() if values[10] is not None else None
+    "compensation": str(compensation).strip() if compensation is not None else None
    })
 
   print(
@@ -602,12 +630,6 @@ async def import_cim_report(
     "O relatório não contém beneficiários para importar."
    )
 
-  print(
-   f"CIM IMPORT: relatório identificado como {month_text} {year}",
-   flush=True
-  )
-
-  # Só agora abrimos a ligação à base de dados.
   d=DB()
 
   existing=d.query(CIMReport).filter(
@@ -633,7 +655,6 @@ async def import_cim_report(
   print("CIM IMPORT 6/7: a gravar na base de dados", flush=True)
   t2=time.monotonic()
 
-  # bulk_save_objects reduz drasticamente o número de operações SQL.
   objects=[
    CIMReportRow(
     report_id=report.id,
