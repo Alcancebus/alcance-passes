@@ -483,59 +483,63 @@ async def import_cim_report(
   return RedirectResponse("/",303)
 
  d=None
- try:
-  raw=await file.read()
+ wb=None
 
-  # read_only evita carregar toda a formatação do modelo CIM em memória.
+ try:
+  print("CIM IMPORT 1/7: pedido recebido", flush=True)
+
+  raw=await file.read()
+  print(
+   f"CIM IMPORT 2/7: upload lido - {file.filename} - {len(raw)} bytes",
+   flush=True
+  )
+
+  # Nesta fase medimos explicitamente quanto demora o openpyxl a abrir o XLSX.
+  import time
+  t0=time.monotonic()
+
   wb=openpyxl.load_workbook(
    BytesIO(raw),
    data_only=True,
    read_only=True
   )
 
+  print(
+   f"CIM IMPORT 3/7: Excel aberto em {time.monotonic()-t0:.2f}s",
+   flush=True
+  )
+
   sheet_name="CIM_AT - ANO_MÊS - Com NIF"
 
   if sheet_name not in wb.sheetnames:
-   wb.close()
    raise HTTPException(
     400,
     "O Excel não contém a folha esperada da CIM."
    )
 
   ws=wb[sheet_name]
+  print("CIM IMPORT 4/7: folha CIM localizada", flush=True)
 
   year_value=ws["B6"].value
   month_value=ws["B7"].value
 
   months={
-   "JANEIRO":1,
-   "FEVEREIRO":2,
-   "MARÇO":3,
-   "MARCO":3,
-   "ABRIL":4,
-   "MAIO":5,
-   "JUNHO":6,
-   "JULHO":7,
-   "AGOSTO":8,
-   "SETEMBRO":9,
-   "OUTUBRO":10,
-   "NOVEMBRO":11,
-   "DEZEMBRO":12
+   "JANEIRO":1,"FEVEREIRO":2,"MARÇO":3,"MARCO":3,
+   "ABRIL":4,"MAIO":5,"JUNHO":6,"JULHO":7,
+   "AGOSTO":8,"SETEMBRO":9,"OUTUBRO":10,
+   "NOVEMBRO":11,"DEZEMBRO":12
   }
 
   try:
    year=int(year_value)
   except:
-   wb.close()
    raise HTTPException(
     400,
     "Não foi possível identificar o ano do relatório."
    )
 
   month_text=str(month_value or "").strip().upper()
-
   if month_text not in months:
-   wb.close()
    raise HTTPException(
     400,
     "Não foi possível identificar o mês do relatório."
@@ -543,34 +547,11 @@ async def import_cim_report(
 
   month=months[month_text]
 
-  d=DB()
-
-  existing=d.query(CIMReport).filter(
-   CIMReport.year==year,
-   CIMReport.month==month
-  ).first()
-
-  if existing:
-   wb.close()
-   raise HTTPException(
-    400,
-    f"Já existe um relatório CIM para {month_text} de {year}."
-   )
-
-  report=CIMReport(
-   year=year,
-   month=month,
-   source="MANUAL",
-   source_file=file.filename
-  )
-  d.add(report)
-  d.flush()
-
-  imported=0
+  # Primeiro recolhemos os dados em memória; ainda não abrimos a BD.
+  rows=[]
   empty_streak=0
+  t1=time.monotonic()
 
-  # Lê apenas E:O e termina após 25 linhas consecutivas sem NIF/nome.
-  # max_row=5000 é uma proteção adicional contra folhas formatadas até ao fim.
   for values in ws.iter_rows(
    min_row=13,
    max_row=5000,
@@ -589,62 +570,120 @@ async def import_cim_report(
 
    empty_streak=0
 
-   title=values[3]
-   pvp=values[4]
-   origin=values[5]
-   destination=values[6]
-   school=values[7]
    validations_value=values[8]
-   compensation=values[10]
-
    try:
     validations=int(validations_value or 0)
    except:
     validations=0
 
-   d.add(CIMReportRow(
-    report_id=report.id,
-    nif=str(nif).strip() if nif is not None else None,
-    name=str(name).strip() if name is not None else "",
-    title=str(title).strip() if title is not None else None,
-    pvp=str(pvp).strip() if pvp is not None else None,
-    origin=str(origin).strip() if origin is not None else None,
-    destination=str(destination).strip() if destination is not None else None,
-    school=str(school).strip() if school is not None else None,
-    validations=validations,
-    compensation=str(compensation).strip() if compensation is not None else None
-   ))
-   imported+=1
+   rows.append({
+    "nif": str(nif).strip() if nif is not None else None,
+    "name": str(name).strip() if name is not None else "",
+    "title": str(values[3]).strip() if values[3] is not None else None,
+    "pvp": str(values[4]).strip() if values[4] is not None else None,
+    "origin": str(values[5]).strip() if values[5] is not None else None,
+    "destination": str(values[6]).strip() if values[6] is not None else None,
+    "school": str(values[7]).strip() if values[7] is not None else None,
+    "validations": validations,
+    "compensation": str(values[10]).strip() if values[10] is not None else None
+   })
+
+  print(
+   f"CIM IMPORT 5/7: {len(rows)} registos lidos em {time.monotonic()-t1:.2f}s",
+   flush=True
+  )
 
   wb.close()
+  wb=None
 
-  if imported==0:
+  if not rows:
    raise HTTPException(
     400,
     "O relatório não contém beneficiários para importar."
    )
 
+  print(
+   f"CIM IMPORT: relatório identificado como {month_text} {year}",
+   flush=True
+  )
+
+  # Só agora abrimos a ligação à base de dados.
+  d=DB()
+
+  existing=d.query(CIMReport).filter(
+   CIMReport.year==year,
+   CIMReport.month==month
+  ).first()
+
+  if existing:
+   raise HTTPException(
+    400,
+    f"Já existe um relatório CIM para {month_text} de {year}."
+   )
+
+  report=CIMReport(
+   year=year,
+   month=month,
+   source="MANUAL",
+   source_file=file.filename
+  )
+  d.add(report)
+  d.flush()
+
+  print("CIM IMPORT 6/7: a gravar na base de dados", flush=True)
+  t2=time.monotonic()
+
+  # bulk_save_objects reduz drasticamente o número de operações SQL.
+  objects=[
+   CIMReportRow(
+    report_id=report.id,
+    nif=x["nif"],
+    name=x["name"],
+    title=x["title"],
+    pvp=x["pvp"],
+    origin=x["origin"],
+    destination=x["destination"],
+    school=x["school"],
+    validations=x["validations"],
+    compensation=x["compensation"]
+   )
+   for x in rows
+  ]
+
+  d.bulk_save_objects(objects)
   d.commit()
 
+  print(
+   f"CIM IMPORT 7/7: concluído - {len(rows)} registos - BD {time.monotonic()-t2:.2f}s",
+   flush=True
+  )
+
   return RedirectResponse(
-   f"/admin?cim_imported={imported}&cim_month={year}-{month:02d}",
+   f"/admin?cim_imported={len(rows)}&cim_month={year}-{month:02d}",
    303
   )
 
- except HTTPException:
+ except HTTPException as e:
   if d is not None:
    d.rollback()
+  print(f"CIM IMPORT: HTTP ERROR - {e.detail}", flush=True)
   raise
 
  except Exception as e:
   if d is not None:
    d.rollback()
+  print("CIM IMPORT: ERRO - "+repr(e), flush=True)
   raise HTTPException(
    400,
    "Erro ao importar relatório CIM: "+str(e)
   )
 
  finally:
+  if wb is not None:
+   try:
+    wb.close()
+   except:
+    pass
   if d is not None:
    d.close()
 
