@@ -440,42 +440,9 @@ async def import_historical_trips(
   )
 
 class Start(BaseModel):device:str;line:str;direction:str;token:str
-@app.post("/admin/cim-report/upload-test")
-async def cim_report_upload_test(
- r:Request,
- file:UploadFile=File(...)
-):
- if not ok(r,["admin"]):
-  return RedirectResponse("/",303)
-
- print("CIM UPLOAD TEST: pedido recebido", flush=True)
-
- try:
-  raw=await file.read()
-  size=len(raw)
-  print(
-   f"CIM UPLOAD TEST: ficheiro recebido - {file.filename} - {size} bytes",
-   flush=True
-  )
-
-  return RedirectResponse(
-   f"/admin?cim_upload_test=ok&cim_upload_size={size}",
-   303
-  )
-
- except Exception as e:
-  print(
-   "CIM UPLOAD TEST: ERRO - "+repr(e),
-   flush=True
-  )
-  raise HTTPException(
-   400,
-   "Erro no teste de upload: "+str(e)
-  )
-
 
 @app.post("/admin/cim-report/import")
-async def import_cim_report(r:Request,file:UploadFile=File(...)):
+async def import_cim_report(r:Request,file:UploadFile=File(...),replace:str=Form("0")):
  if not ok(r,["admin"]): return RedirectResponse("/",303)
  d=None; wb=None
  try:
@@ -510,9 +477,29 @@ async def import_cim_report(r:Request,file:UploadFile=File(...)):
   wb.close(); wb=None
   if not rows: raise HTTPException(400,"O relatório não contém beneficiários para importar.")
   d=DB()
-  if d.query(CIMReport).filter(CIMReport.year==year,CIMReport.month==month).first(): raise HTTPException(400,f"Já existe um relatório CIM para {month_text} de {year}.")
-  report=CIMReport(year=year,month=month,source="MANUAL",source_file=file.filename); d.add(report); d.flush()
-  d.bulk_save_objects([CIMReportRow(report_id=report.id,**x) for x in rows]); d.commit()
+  existing=d.query(CIMReport).filter(CIMReport.year==year,CIMReport.month==month).first()
+
+  if existing and replace!="1":
+   raise HTTPException(400,f"Já existe um relatório CIM para {month_text} de {year}. Use a opção Substituir relatório existente.")
+
+  if existing and replace=="1":
+   d.query(CIMReportRow).filter(CIMReportRow.report_id==existing.id).delete(synchronize_session=False)
+   existing.source="MANUAL"
+   existing.source_file=file.filename
+   report=existing
+   replaced=True
+  else:
+   report=CIMReport(year=year,month=month,source="MANUAL",source_file=file.filename)
+   d.add(report)
+   d.flush()
+   replaced=False
+
+  d.bulk_save_objects([CIMReportRow(report_id=report.id,**x) for x in rows])
+  d.commit()
+
+  if replaced:
+   return RedirectResponse(f"/admin?cim_replaced={len(rows)}&cim_month={year}-{month:02d}",303)
+
   return RedirectResponse(f"/admin?cim_imported={len(rows)}&cim_month={year}-{month:02d}",303)
  except HTTPException:
   if d is not None: d.rollback()
