@@ -36,6 +36,16 @@ Nova palavra-passe CIM
  
 Confirmar palavra-passe CIM
  Alterar palavra-passe CIM
+Relatórios mensais CIM
+Importe aqui os relatórios Excel do modelo oficial da CIM. Os relatórios históricos importados ficam identificados como MANUAL. Os relatórios futuros gerados a partir das validações SUNMI ficarão identificados como AUTOMÁTICO.
+
+{% if request.query_params.get("cim_imported") %}
+Relatório CIM importado com sucesso: {{ request.query_params.get("cim_imported") }} registos — mês {{ request.query_params.get("cim_month") }}.
+
+{% endif %}
+Nenhum ficheiro selecionado Importar Excel CIM
+O sistema identifica automaticamente o ano e o mês do ficheiro e impede a importação duplicada do mesmo mês.
+
 Novo passe
 Nome
  
@@ -45,16 +55,6 @@ UID NFC
  
 dd/mm/aaaa
  Criar passe
-Relatórios mensais CIM
-Importe aqui os relatórios Excel do modelo oficial da CIM. Os relatórios antigos ficam identificados como MANUAL. Os relatórios futuros gerados pelas validações SUNMI ficarão identificados como AUTOMÁTICO.
-
-{% if request.query_params.get("cim_imported") %}
-Relatório CIM importado com sucesso: {{ request.query_params.get("cim_imported") }} registos — mês {{ request.query_params.get("cim_month") }}.
-
-{% endif %}
-Nenhum ficheiro selecionado Importar Excel CIM
-O sistema identifica automaticamente o ano e o mês existentes no ficheiro. Não permite importar duas vezes o mesmo mês.
-
 Passes
 {% for p in passengers %} {% else %} {% endfor %}
 Nome	N.º passe	UID NFC	Validade	Estado	Ações
@@ -65,13 +65,3 @@ Nome	N.º passe	UID NFC	Validade	Estado	Ações
 dd/mm/aaaa
 {% if p.active %} ATIVO {% else %} BLOQUEADO {% endif %}	Guardar {% if p.active %} Bloquear {% else %} Desbloquear {% endif %} Eliminar
 Nenhum passe registado.
-{% for p in passengers %}
-{{p.name}}
- 
-{{p.pass_number}}
- 
-{{p.card_uid}}
- 
-dd/mm/aaaa
- Guardar
-{% if p.active %}Bloquear {% else %} Desbloquear {% endif %} Eliminar {% else %} Nenhum passe registado. {% endfor %}
