@@ -232,8 +232,12 @@ def passenger_zone(line,stop):
  return zone
 
 @app.post("/admin/passenger")
-def add(r:Request,name:str=Form(...),pass_number:str=Form(...),card_uid:str=Form(...),valid_until:str=Form(...),line:str=Form(...),stop:str=Form(...)):
+def add(r:Request,name:str=Form(...),pass_number:str=Form(...),card_uid:str=Form(...),valid_until:str=Form(...),route_choice:str=Form(...)):
  if not ok(r,["admin"]): return RedirectResponse("/",303)
+ try:
+  line,stop=route_choice.split("|",1)
+ except ValueError:
+  raise HTTPException(400,"Linha/paragem inválida.")
  zone=passenger_zone(line,stop)
  d=DB()
  d.add(Passenger(name=name.strip(),pass_number=pass_number.strip(),card_uid=card_uid.strip().upper(),valid_until=valid_until,line=line,stop=stop,fare_zone=zone))
@@ -241,8 +245,12 @@ def add(r:Request,name:str=Form(...),pass_number:str=Form(...),card_uid:str=Form
  return RedirectResponse("/admin",303)
 
 @app.post("/admin/passenger/{pid}/edit")
-def edit_passenger(pid:int,r:Request,name:str=Form(...),pass_number:str=Form(...),card_uid:str=Form(...),valid_until:str=Form(...),line:str=Form(...),stop:str=Form(...)):
+def edit_passenger(pid:int,r:Request,name:str=Form(...),pass_number:str=Form(...),card_uid:str=Form(...),valid_until:str=Form(...),route_choice:str=Form(...)):
  if not ok(r,["admin"]): return RedirectResponse("/",303)
+ try:
+  line,stop=route_choice.split("|",1)
+ except ValueError:
+  raise HTTPException(400,"Linha/paragem inválida.")
  zone=passenger_zone(line,stop)
  d=DB(); p=d.get(Passenger,pid)
  if p:
