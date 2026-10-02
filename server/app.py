@@ -1,3 +1,4 @@
+from decimal import Decimal, ROUND_HALF_UP
 import os,csv
 from io import StringIO,BytesIO
 import openpyxl
@@ -76,11 +77,13 @@ def ensure_passenger_columns():
    conn.exec_driver_sql("ALTER TABLE passengers ADD COLUMN IF NOT EXISTS line VARCHAR")
    conn.exec_driver_sql("ALTER TABLE passengers ADD COLUMN IF NOT EXISTS stop VARCHAR")
    conn.exec_driver_sql("ALTER TABLE passengers ADD COLUMN IF NOT EXISTS fare_zone VARCHAR")
+   conn.exec_driver_sql("ALTER TABLE passengers ADD COLUMN IF NOT EXISTS nif VARCHAR")
   elif engine.dialect.name=="sqlite":
    cols={row[1] for row in conn.exec_driver_sql("PRAGMA table_info(passengers)").fetchall()}
    if "line" not in cols: conn.exec_driver_sql("ALTER TABLE passengers ADD COLUMN line VARCHAR")
    if "stop" not in cols: conn.exec_driver_sql("ALTER TABLE passengers ADD COLUMN stop VARCHAR")
    if "fare_zone" not in cols: conn.exec_driver_sql("ALTER TABLE passengers ADD COLUMN fare_zone VARCHAR")
+   if "nif" not in cols: conn.exec_driver_sql("ALTER TABLE passengers ADD COLUMN nif VARCHAR")
 
 ensure_passenger_columns()
 def seed():
@@ -232,7 +235,7 @@ def passenger_zone(line,stop):
  return zone
 
 @app.post("/admin/passenger")
-def add(r:Request,name:str=Form(...),pass_number:str=Form(...),card_uid:str=Form(...),valid_until:str=Form(...),route_choice:str=Form(...)):
+def add(r:Request,name:str=Form(...),pass_number:str=Form(...),card_uid:str=Form(...),valid_until:str=Form(...),route_choice:str=Form(...),nif:str=Form("")):
  if not ok(r,["admin"]): return RedirectResponse("/",303)
  try:
   line,stop=route_choice.split("|",1)
@@ -240,12 +243,12 @@ def add(r:Request,name:str=Form(...),pass_number:str=Form(...),card_uid:str=Form
   raise HTTPException(400,"Linha/paragem inválida.")
  zone=passenger_zone(line,stop)
  d=DB()
- d.add(Passenger(name=name.strip(),pass_number=pass_number.strip(),card_uid=card_uid.strip().upper(),valid_until=valid_until,line=line,stop=stop,fare_zone=zone))
+ d.add(Passenger(name=name.strip(),pass_number=pass_number.strip(),card_uid=card_uid.strip().upper(),valid_until=valid_until,line=line,stop=stop,fare_zone=zone,nif=nif.strip() or None))
  d.commit(); d.close()
  return RedirectResponse("/admin",303)
 
 @app.post("/admin/passenger/{pid}/edit")
-def edit_passenger(pid:int,r:Request,name:str=Form(...),pass_number:str=Form(...),card_uid:str=Form(...),valid_until:str=Form(...),route_choice:str=Form(...)):
+def edit_passenger(pid:int,r:Request,name:str=Form(...),pass_number:str=Form(...),card_uid:str=Form(...),valid_until:str=Form(...),route_choice:str=Form(...),nif:str=Form("")):
  if not ok(r,["admin"]): return RedirectResponse("/",303)
  try:
   line,stop=route_choice.split("|",1)
@@ -255,7 +258,7 @@ def edit_passenger(pid:int,r:Request,name:str=Form(...),pass_number:str=Form(...
  d=DB(); p=d.get(Passenger,pid)
  if p:
   p.name=name.strip(); p.pass_number=pass_number.strip(); p.card_uid=card_uid.strip().upper()
-  p.valid_until=valid_until; p.line=line; p.stop=stop; p.fare_zone=zone
+  p.valid_until=valid_until; p.line=line; p.stop=stop; p.fare_zone=zone; p.nif=nif.strip() or None
   d.commit()
  d.close()
  return RedirectResponse("/admin",303)
@@ -557,11 +560,14 @@ async def import_cim_report(r:Request,file:UploadFile=File(...),replace:str=Form
   if d is not None: d.close()
 
 def fare_value(zone):
- values={"0-4":28.30,"5-8":40.35,"9-12":50.90,"13-16":62.90}
+ values={"0-4":Decimal("28.30"),"5-8":Decimal("40.35"),"9-12":Decimal("50.90"),"13-16":Decimal("62.90")}
  return values.get(zone)
 
+def money_round(value):
+ return value.quantize(Decimal("0.01"),rounding=ROUND_HALF_UP)
+
 def euro_text(value):
- return f"{value:.2f}".replace(".",",")
+ return f"{money_round(value):.2f}".replace(".",",")
 
 @app.post("/admin/cim-report/generate")
 def generate_cim_report(r:Request,month:str=Form(...),replace:str=Form("0")):
@@ -601,11 +607,11 @@ def generate_cim_report(r:Request,month:str=Form(...),replace:str=Form("0")):
    pvp=fare_value((p.fare_zone or "").strip())
    if pvp is None:
     skipped.append(p.pass_number or p.name); continue
-   compensation=pvp if count>=10 else pvp*0.10*count
+   compensation=pvp if count>=10 else pvp*Decimal("0.10")*count
    generated.append({
-    "nif":None,"name":p.name or "","title":p.pass_number or "",
+    "nif":p.nif or "","name":p.name or "","title":p.pass_number or "",
     "pvp":euro_text(pvp),"origin":p.stop or "","destination":"Rossas",
-    "school":None,"validations":count,"compensation":euro_text(compensation)
+    "school":"Centro Escolar de Rossas","validations":count,"compensation":euro_text(compensation)
    })
 
   if not generated:
