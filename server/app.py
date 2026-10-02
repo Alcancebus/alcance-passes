@@ -1,4 +1,3 @@
-from decimal import Decimal, ROUND_HALF_UP
 import os,csv
 from io import StringIO,BytesIO
 import openpyxl
@@ -23,16 +22,7 @@ templates=Jinja2Templates(directory="templates"); DEVICE_TOKEN=os.getenv("DEVICE
 class User(Base):
  __tablename__="users"; id=Column(Integer,primary_key=True); username=Column(String,unique=True); password_hash=Column(String); role=Column(String)
 class Passenger(Base):
- __tablename__="passengers"
- id=Column(Integer,primary_key=True)
- name=Column(String)
- pass_number=Column(String,unique=True)
- card_uid=Column(String,unique=True)
- valid_until=Column(String)
- active=Column(Boolean,default=True)
- line=Column(String,nullable=True)
- stop=Column(String,nullable=True)
- fare_zone=Column(String,nullable=True)
+ __tablename__="passengers"; id=Column(Integer,primary_key=True); name=Column(String); pass_number=Column(String,unique=True); card_uid=Column(String,unique=True); valid_until=Column(String); active=Column(Boolean,default=True)
 class Trip(Base):
  __tablename__="trips"; id=Column(Integer,primary_key=True); device=Column(String); line=Column(String); direction=Column(String); started_at=Column(DateTime,default=datetime.now); ended_at=Column(DateTime,nullable=True)
 class HistoricalTrip(Base):
@@ -70,22 +60,6 @@ class CIMReportRow(Base):
  validations=Column(Integer,default=0)
  compensation=Column(String,nullable=True)
 Base.metadata.create_all(engine)
-
-def ensure_passenger_columns():
- with engine.begin() as conn:
-  if engine.dialect.name=="postgresql":
-   conn.exec_driver_sql("ALTER TABLE passengers ADD COLUMN IF NOT EXISTS line VARCHAR")
-   conn.exec_driver_sql("ALTER TABLE passengers ADD COLUMN IF NOT EXISTS stop VARCHAR")
-   conn.exec_driver_sql("ALTER TABLE passengers ADD COLUMN IF NOT EXISTS fare_zone VARCHAR")
-   conn.exec_driver_sql("ALTER TABLE passengers ADD COLUMN IF NOT EXISTS nif VARCHAR")
-  elif engine.dialect.name=="sqlite":
-   cols={row[1] for row in conn.exec_driver_sql("PRAGMA table_info(passengers)").fetchall()}
-   if "line" not in cols: conn.exec_driver_sql("ALTER TABLE passengers ADD COLUMN line VARCHAR")
-   if "stop" not in cols: conn.exec_driver_sql("ALTER TABLE passengers ADD COLUMN stop VARCHAR")
-   if "fare_zone" not in cols: conn.exec_driver_sql("ALTER TABLE passengers ADD COLUMN fare_zone VARCHAR")
-   if "nif" not in cols: conn.exec_driver_sql("ALTER TABLE passengers ADD COLUMN nif VARCHAR")
-
-ensure_passenger_columns()
 def seed():
  d=DB()
  try:
@@ -145,9 +119,7 @@ def admin(r:Request):
   {
    "request":r,
    "passengers":ps,
-   "historical":historical,
-   "stop_zones":STOP_ZONES,
-   "fare_pvp":FARE_PVP
+   "historical":historical
   }
  )
 @app.post("/login")
@@ -217,52 +189,34 @@ def change_cim_password(
 
  return RedirectResponse("/admin?cim_password_changed=1",303)
 
-FARE_PVP={"0-4":"28,30 €","5-8":"40,35 €","9-12":"50,90 €","13-16":"62,90 €"}
-STOP_ZONES={
- "Linha 1":{
-  "Figueiró":"9-12","Santa Marinha":"9-12","Santa Marta":"9-12",
-  "Pombal":"5-8","Santinha":"5-8","Souto":"5-8","Igreja":"5-8","Bairro":"5-8","Covelo":"5-8",
-  "Arroteia":"0-4","Politeito":"0-4","São Pedro":"0-4","Rossas":"DESTINO"
- },
- "Linha 2":{
-  "Anjos":"13-16","Agra":"9-12","Calvos - Penedo":"5-8","Calvos - Cruzeiro":"5-8",
-  "Calvos - Reta":"5-8","Ortezelo":"0-4","Rossas":"DESTINO"
- }
-}
-def passenger_zone(line,stop):
- zone=STOP_ZONES.get(line,{}).get(stop)
- if not zone: raise HTTPException(400,"Paragem inválida para a linha selecionada.")
- return zone
-
 @app.post("/admin/passenger")
-def add(r:Request,name:str=Form(...),pass_number:str=Form(...),card_uid:str=Form(...),valid_until:str=Form(...),route_choice:str=Form(...),nif:str=Form("")):
- if not ok(r,["admin"]): return RedirectResponse("/",303)
- try:
-  line,stop=route_choice.split("|",1)
- except ValueError:
-  raise HTTPException(400,"Linha/paragem inválida.")
- zone=passenger_zone(line,stop)
- d=DB()
- d.add(Passenger(name=name.strip(),pass_number=pass_number.strip(),card_uid=card_uid.strip().upper(),valid_until=valid_until,line=line,stop=stop,fare_zone=zone,nif=nif.strip() or None))
- d.commit(); d.close()
- return RedirectResponse("/admin",303)
-
+def add(r:Request,name:str=Form(...),pass_number:str=Form(...),card_uid:str=Form(...),valid_until:str=Form(...)):
+ if not ok(r,["admin"]):return RedirectResponse("/",303)
+ d=DB(); d.add(Passenger(name=name,pass_number=pass_number,card_uid=card_uid.upper(),valid_until=valid_until)); d.commit(); d.close();return RedirectResponse("/admin",303)
 @app.post("/admin/passenger/{pid}/edit")
-def edit_passenger(pid:int,r:Request,name:str=Form(...),pass_number:str=Form(...),card_uid:str=Form(...),valid_until:str=Form(...),route_choice:str=Form(...),nif:str=Form("")):
- if not ok(r,["admin"]): return RedirectResponse("/",303)
- try:
-  line,stop=route_choice.split("|",1)
- except ValueError:
-  raise HTTPException(400,"Linha/paragem inválida.")
- zone=passenger_zone(line,stop)
- d=DB(); p=d.get(Passenger,pid)
+def edit_passenger(
+ pid:int,
+ r:Request,
+ name:str=Form(...),
+ pass_number:str=Form(...),
+ card_uid:str=Form(...),
+ valid_until:str=Form(...)
+):
+ if not ok(r,["admin"]):
+  return RedirectResponse("/",303)
+
+ d=DB()
+ p=d.get(Passenger,pid)
+
  if p:
-  p.name=name.strip(); p.pass_number=pass_number.strip(); p.card_uid=card_uid.strip().upper()
-  p.valid_until=valid_until; p.line=line; p.stop=stop; p.fare_zone=zone; p.nif=nif.strip() or None
+  p.name=name.strip()
+  p.pass_number=pass_number.strip()
+  p.card_uid=card_uid.strip().upper()
+  p.valid_until=valid_until
   d.commit()
+
  d.close()
  return RedirectResponse("/admin",303)
-
 @app.post("/admin/passenger/{pid}/toggle")
 def toggle_passenger(pid:int,r:Request):
  if not ok(r,["admin"]):
@@ -486,9 +440,42 @@ async def import_historical_trips(
   )
 
 class Start(BaseModel):device:str;line:str;direction:str;token:str
+@app.post("/admin/cim-report/upload-test")
+async def cim_report_upload_test(
+ r:Request,
+ file:UploadFile=File(...)
+):
+ if not ok(r,["admin"]):
+  return RedirectResponse("/",303)
+
+ print("CIM UPLOAD TEST: pedido recebido", flush=True)
+
+ try:
+  raw=await file.read()
+  size=len(raw)
+  print(
+   f"CIM UPLOAD TEST: ficheiro recebido - {file.filename} - {size} bytes",
+   flush=True
+  )
+
+  return RedirectResponse(
+   f"/admin?cim_upload_test=ok&cim_upload_size={size}",
+   303
+  )
+
+ except Exception as e:
+  print(
+   "CIM UPLOAD TEST: ERRO - "+repr(e),
+   flush=True
+  )
+  raise HTTPException(
+   400,
+   "Erro no teste de upload: "+str(e)
+  )
+
 
 @app.post("/admin/cim-report/import")
-async def import_cim_report(r:Request,file:UploadFile=File(...),replace:str=Form("0")):
+async def import_cim_report(r:Request,file:UploadFile=File(...)):
  if not ok(r,["admin"]): return RedirectResponse("/",303)
  d=None; wb=None
  try:
@@ -523,29 +510,9 @@ async def import_cim_report(r:Request,file:UploadFile=File(...),replace:str=Form
   wb.close(); wb=None
   if not rows: raise HTTPException(400,"O relatório não contém beneficiários para importar.")
   d=DB()
-  existing=d.query(CIMReport).filter(CIMReport.year==year,CIMReport.month==month).first()
-
-  if existing and replace!="1":
-   raise HTTPException(400,f"Já existe um relatório CIM para {month_text} de {year}. Use a opção Substituir relatório existente.")
-
-  if existing and replace=="1":
-   d.query(CIMReportRow).filter(CIMReportRow.report_id==existing.id).delete(synchronize_session=False)
-   existing.source="MANUAL"
-   existing.source_file=file.filename
-   report=existing
-   replaced=True
-  else:
-   report=CIMReport(year=year,month=month,source="MANUAL",source_file=file.filename)
-   d.add(report)
-   d.flush()
-   replaced=False
-
-  d.bulk_save_objects([CIMReportRow(report_id=report.id,**x) for x in rows])
-  d.commit()
-
-  if replaced:
-   return RedirectResponse(f"/admin?cim_replaced={len(rows)}&cim_month={year}-{month:02d}",303)
-
+  if d.query(CIMReport).filter(CIMReport.year==year,CIMReport.month==month).first(): raise HTTPException(400,f"Já existe um relatório CIM para {month_text} de {year}.")
+  report=CIMReport(year=year,month=month,source="MANUAL",source_file=file.filename); d.add(report); d.flush()
+  d.bulk_save_objects([CIMReportRow(report_id=report.id,**x) for x in rows]); d.commit()
   return RedirectResponse(f"/admin?cim_imported={len(rows)}&cim_month={year}-{month:02d}",303)
  except HTTPException:
   if d is not None: d.rollback()
@@ -558,85 +525,6 @@ async def import_cim_report(r:Request,file:UploadFile=File(...),replace:str=Form
    try: wb.close()
    except: pass
   if d is not None: d.close()
-
-def fare_value(zone):
- values={"0-4":Decimal("28.30"),"5-8":Decimal("40.35"),"9-12":Decimal("50.90"),"13-16":Decimal("62.90")}
- return values.get(zone)
-
-def money_round(value):
- return value.quantize(Decimal("0.01"),rounding=ROUND_HALF_UP)
-
-def euro_text(value):
- return f"{money_round(value):.2f}".replace(".",",")
-
-@app.post("/admin/cim-report/generate")
-def generate_cim_report(r:Request,month:str=Form(...),replace:str=Form("0")):
- if not ok(r,["admin"]): return RedirectResponse("/",303)
- try:
-  year,month_number=map(int,month.split("-"))
-  if month_number<1 or month_number>12: raise ValueError()
- except:
-  raise HTTPException(400,"Mês inválido.")
-
- today=date.today()
- if (year,month_number)>=(today.year,today.month):
-  raise HTTPException(400,"O relatório automático só pode ser gerado depois de o mês terminar.")
-
- start=datetime(year,month_number,1)
- end=datetime(year+1,1,1) if month_number==12 else datetime(year,month_number+1,1)
-
- d=DB()
- try:
-  existing=d.query(CIMReport).filter(CIMReport.year==year,CIMReport.month==month_number).first()
-  if existing and existing.source=="MANUAL":
-   raise HTTPException(400,"Já existe um relatório MANUAL para este mês. O gerador automático não o substitui.")
-  if existing and replace!="1":
-   raise HTTPException(400,"Já existe um relatório AUTOMÁTICO para este mês. Use Regenerar relatório automático.")
-
-  rows=(d.query(Passenger,Validation)
-   .join(Validation,Validation.passenger_id==Passenger.id)
-   .filter(Validation.result=="VALIDO",Validation.timestamp>=start,Validation.timestamp<end).all())
-
-  counts={}
-  for p,v in rows: counts[p.id]=counts.get(p.id,0)+1
-
-  generated=[]; skipped=[]
-  for pid,count in sorted(counts.items()):
-   p=d.get(Passenger,pid)
-   if not p: continue
-   pvp=fare_value((p.fare_zone or "").strip())
-   if pvp is None:
-    skipped.append(p.pass_number or p.name); continue
-   compensation=pvp if count>=10 else pvp*Decimal("0.10")*count
-   generated.append({
-    "nif":p.nif or "","name":p.name or "","title":p.pass_number or "",
-    "pvp":euro_text(pvp),"origin":p.stop or "","destination":"Rossas",
-    "school":"Centro Escolar de Rossas","validations":count,"compensation":euro_text(compensation)
-   })
-
-  if not generated:
-   raise HTTPException(400,"Não foram encontradas validações válidas com zona tarifária definida para este mês.")
-
-  if existing:
-   d.query(CIMReportRow).filter(CIMReportRow.report_id==existing.id).delete(synchronize_session=False)
-   existing.source="AUTOMATICO"; existing.source_file=None; existing.created_at=datetime.now()
-   report=existing; regenerated=True
-  else:
-   report=CIMReport(year=year,month=month_number,source="AUTOMATICO",source_file=None)
-   d.add(report); d.flush(); regenerated=False
-
-  d.bulk_save_objects([CIMReportRow(report_id=report.id,**x) for x in generated])
-  d.commit()
-  params=f"cim_auto_rows={len(generated)}&cim_auto_month={year}-{month_number:02d}"
-  if regenerated: params+="&cim_auto_regenerated=1"
-  if skipped: params+=f"&cim_auto_skipped={len(skipped)}"
-  return RedirectResponse("/admin?"+params,303)
- except HTTPException:
-  d.rollback(); raise
- except Exception as e:
-  d.rollback(); raise HTTPException(400,"Erro ao gerar relatório automático: "+str(e))
- finally:
-  d.close()
 
 class Read(BaseModel):trip_id:int;card_uid:str;token:str
 class End(BaseModel):trip_id:int;token:str
