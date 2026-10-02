@@ -41,10 +41,10 @@ input,select,button{padding:9px;margin:4px}button{cursor:pointer}table{width:100
 <form method="post" action="/admin/cim-report/generate" onsubmit="return confirm('Regenerar o relatório automático? Os dados automáticos anteriores desse mês serão substituídos. Relatórios MANUAIS nunca são substituídos.');">
 <input type="month" name="month" required><input type="hidden" name="replace" value="1"><button type="submit">Regenerar relatório automático</button>
 </form>
-<p class="small">Só permite meses já terminados. De 1 a 9 validações: 10% do PVP por validação. Com 10 ou mais: PVP integral. Sem validações: sem compensação.</p>
+<p class="small">Só permite meses já terminados. De 1 a 9 validações: 10% do PVP por validação, com arredondamento monetário a cêntimos. Com 10 ou mais: PVP integral. Sem validações: sem compensação. O estabelecimento é preenchido automaticamente como Centro Escolar de Rossas.</p>
 </div>
 <div class="box"><h2>Novo passe</h2><form method="post" action="/admin/passenger">
-<input name="name" placeholder="Nome" required><input name="pass_number" placeholder="N.º passe" required><input name="card_uid" placeholder="UID NFC" required><input type="date" name="valid_until" required>
+<input name="name" placeholder="Nome" required><input name="nif" placeholder="NIF" inputmode="numeric" maxlength="9"><input name="pass_number" placeholder="N.º passe" required><input name="card_uid" placeholder="UID NFC" required><input type="date" name="valid_until" required>
 
 <select name="route_choice" required onchange="syncRoute(this)">
 <option value="">Linha e paragem</option>
@@ -76,9 +76,10 @@ input,select,button{padding:9px;margin:4px}button{cursor:pointer}table{width:100
 <button type="submit">Criar passe</button></form>
 <p class="small">Escolha a linha e a paragem. A zona é determinada automaticamente pela linha e paragem. O PVP será definido no relatório CIM de acordo com o tarifário aplicável.</p></div>
 
-<h2>Passes</h2><table><tr><th>Nome</th><th>N.º passe</th><th>UID NFC</th><th>Validade</th><th>Linha</th><th>Paragem</th><th>Zona</th><th>Estado</th><th>Ações</th></tr>
+<h2>Passes</h2><table><tr><th>Nome</th><th>NIF</th><th>N.º passe</th><th>UID NFC</th><th>Validade</th><th>Linha</th><th>Paragem</th><th>Zona</th><th>Estado</th><th>Ações</th></tr>
 {% for p in passengers %}
 <tr><td><form method="post" action="/admin/passenger/{{p.id}}/edit"><input name="name" value="{{p.name}}" required></td>
+<td><input name="nif" value="{{p.nif or ''}}" placeholder="NIF" inputmode="numeric" maxlength="9"></td>
 <td><input name="pass_number" value="{{p.pass_number}}" required></td><td><input name="card_uid" value="{{p.card_uid}}" required></td><td><input type="date" name="valid_until" value="{{p.valid_until}}" required></td>
 <td colspan="2">
 <select name="route_choice" required onchange="syncRoute(this)">
@@ -112,6 +113,6 @@ input,select,button{padding:9px;margin:4px}button{cursor:pointer}table{width:100
 <td><span class="fare-display fare">{% if p.fare_zone %}{% if p.fare_zone=="DESTINO" %}Destino final{% else %}Zona {{p.fare_zone}}{% endif %}{% else %}Por definir{% endif %}</span></td>
 <td>{% if p.active %}<strong style="color:green;">ATIVO</strong>{% else %}<strong style="color:red;">BLOQUEADO</strong>{% endif %}</td>
 <td><button type="submit">Guardar</button></form><form method="post" action="/admin/passenger/{{p.id}}/toggle" style="display:inline">{% if p.active %}<button type="submit">Bloquear</button>{% else %}<button type="submit">Desbloquear</button>{% endif %}</form><form method="post" action="/admin/passenger/{{p.id}}/delete" style="display:inline" onsubmit="return confirm('Tem a certeza que pretende eliminar este passe?');"><button type="submit">Eliminar</button></form></td></tr>
-{% else %}<tr><td colspan="9">Nenhum passe registado.</td></tr>{% endfor %}</table></div>
+{% else %}<tr><td colspan="10">Nenhum passe registado.</td></tr>{% endfor %}</table></div>
 
 </body></html>
