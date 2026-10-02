@@ -572,6 +572,103 @@ async def import_cim_report(r:Request,file:UploadFile=File(...),replace:str=Form
    except: pass
   if d is not None: d.close()
 
+def automatic_fare_value(zone):
+ return {
+  "0-4":Decimal("28.30"),
+  "5-8":Decimal("40.35"),
+  "9-12":Decimal("50.90"),
+  "13-16":Decimal("62.90")
+ }.get(zone)
+
+def automatic_euro_text(value):
+ return f"{value.quantize(Decimal('0.01'),rounding=ROUND_HALF_UP):.2f}".replace(".",",")
+
+@app.post("/admin/cim-report/generate")
+def generate_cim_report(r:Request,month:str=Form(...),replace:str=Form("0")):
+ if not ok(r,["admin"]): return RedirectResponse("/",303)
+ try:
+  year,month_number=map(int,month.split("-"))
+  if not 1<=month_number<=12: raise ValueError()
+ except:
+  raise HTTPException(400,"Mês inválido.")
+
+ today=date.today()
+ if (year,month_number)>=(today.year,today.month):
+  raise HTTPException(400,"O relatório automático só pode ser gerado depois de o mês terminar.")
+
+ start=datetime(year,month_number,1)
+ end=datetime(year+1,1,1) if month_number==12 else datetime(year,month_number+1,1)
+
+ d=DB()
+ try:
+  existing=d.query(CIMReport).filter(CIMReport.year==year,CIMReport.month==month_number).first()
+
+  if existing and existing.source=="MANUAL":
+   raise HTTPException(400,"Já existe um relatório MANUAL para este mês. O gerador automático não o substitui.")
+  if existing and replace!="1":
+   raise HTTPException(400,"Já existe um relatório AUTOMÁTICO para este mês. Use Regenerar relatório automático.")
+
+  rows=(d.query(Passenger,Validation)
+   .join(Validation,Validation.passenger_id==Passenger.id)
+   .filter(Validation.result=="VALIDO",Validation.timestamp>=start,Validation.timestamp<end)
+   .all())
+
+  counts={}
+  for p,v in rows:
+   counts[p.id]=counts.get(p.id,0)+1
+
+  generated=[]; skipped=0
+  for pid,count in sorted(counts.items()):
+   p=d.get(Passenger,pid)
+   if not p: continue
+   pvp=automatic_fare_value((p.fare_zone or "").strip())
+   if pvp is None:
+    skipped+=1
+    continue
+   compensation=pvp if count>=10 else pvp*Decimal("0.10")*count
+   generated.append({
+    "nif":p.nif or "",
+    "name":p.name or "",
+    "title":p.pass_number or "",
+    "pvp":automatic_euro_text(pvp),
+    "origin":p.stop or "",
+    "destination":"Rossas",
+    "school":"Centro Escolar de Rossas",
+    "validations":count,
+    "compensation":automatic_euro_text(compensation)
+   })
+
+  if not generated:
+   raise HTTPException(400,"Não foram encontradas validações válidas com zona tarifária definida para este mês.")
+
+  if existing:
+   d.query(CIMReportRow).filter(CIMReportRow.report_id==existing.id).delete(synchronize_session=False)
+   existing.source="AUTOMATICO"
+   existing.source_file=None
+   existing.created_at=datetime.now()
+   report=existing
+   regenerated=True
+  else:
+   report=CIMReport(year=year,month=month_number,source="AUTOMATICO",source_file=None)
+   d.add(report);d.flush()
+   regenerated=False
+
+  d.bulk_save_objects([CIMReportRow(report_id=report.id,**row) for row in generated])
+  d.commit()
+
+  params=f"cim_auto_rows={len(generated)}&cim_auto_month={year}-{month_number:02d}"
+  if regenerated: params+="&cim_auto_regenerated=1"
+  if skipped: params+=f"&cim_auto_skipped={skipped}"
+  return RedirectResponse("/admin?"+params,303)
+
+ except HTTPException:
+  d.rollback();raise
+ except Exception as e:
+  d.rollback()
+  raise HTTPException(400,"Erro ao gerar relatório automático: "+str(e))
+ finally:
+  d.close()
+
 class Read(BaseModel):trip_id:int;card_uid:str;token:str
 class End(BaseModel):trip_id:int;token:str
 
