@@ -33,6 +33,7 @@ class Passenger(Base):
  line=Column(String,nullable=True)
  stop=Column(String,nullable=True)
  fare_zone=Column(String,nullable=True)
+ nif=Column(String,nullable=True)
 class Trip(Base):
  __tablename__="trips"; id=Column(Integer,primary_key=True); device=Column(String); line=Column(String); direction=Column(String); started_at=Column(DateTime,default=datetime.now); ended_at=Column(DateTime,nullable=True)
 class HistoricalTrip(Base):
