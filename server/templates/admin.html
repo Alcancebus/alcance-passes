@@ -26,6 +26,23 @@ input,select,button{padding:9px;margin:4px}button{cursor:pointer}table{width:100
 <h3>Importar novo relatório</h3><form method="post" action="/admin/cim-report/import" enctype="multipart/form-data"><input type="hidden" name="replace" value="0"><input type="file" name="file" accept=".xlsx" required><button type="submit">Importar novo relatório</button></form><p class="small">Para meses que ainda não existem. Os duplicados continuam bloqueados.</p>
 <hr style="margin:25px 0;"><h3>Substituir relatório existente</h3><p>Carrega a versão corrigida de um mês já existente e substitui os registos desse mês.</p><form method="post" action="/admin/cim-report/import" enctype="multipart/form-data" onsubmit="return confirm('Tem a certeza de que pretende substituir o relatório deste mês pelos dados do Excel selecionado?');"><input type="hidden" name="replace" value="1"><input type="file" name="file" accept=".xlsx" required><button type="submit">Substituir relatório existente</button></form><p style="font-size:13px;color:#a05a00;font-weight:bold;">Confirme que selecionou o Excel corrigido do mês pretendido.</p></div>
 
+<div class="box">
+<h2>Relatório CIM automático</h2>
+<p>Gera o relatório mensal a partir das validações <strong>VALIDO</strong> registadas pelas SUNMI.</p>
+{% if request.query_params.get("cim_auto_rows") %}
+<p style="color:green;font-weight:bold;">Relatório automático gerado com sucesso: {{ request.query_params.get("cim_auto_rows") }} passes — mês {{ request.query_params.get("cim_auto_month") }}.{% if request.query_params.get("cim_auto_regenerated") %} O relatório automático anterior foi regenerado.{% endif %}</p>
+{% endif %}
+{% if request.query_params.get("cim_auto_skipped") %}
+<p style="color:#a05a00;font-weight:bold;">Atenção: {{ request.query_params.get("cim_auto_skipped") }} passe(s) com validações não foram incluídos por não terem uma zona tarifária válida.</p>
+{% endif %}
+<form method="post" action="/admin/cim-report/generate" onsubmit="return confirm('Gerar o relatório automático deste mês a partir das validações SUNMI?');">
+<input type="month" name="month" required><input type="hidden" name="replace" value="0"><button type="submit">Gerar relatório automático</button>
+</form>
+<form method="post" action="/admin/cim-report/generate" onsubmit="return confirm('Regenerar o relatório automático? Os dados automáticos anteriores desse mês serão substituídos. Relatórios MANUAIS nunca são substituídos.');">
+<input type="month" name="month" required><input type="hidden" name="replace" value="1"><button type="submit">Regenerar relatório automático</button>
+</form>
+<p class="small">Só permite meses já terminados. De 1 a 9 validações: 10% do PVP por validação. Com 10 ou mais: PVP integral. Sem validações: sem compensação.</p>
+</div>
 <div class="box"><h2>Novo passe</h2><form method="post" action="/admin/passenger">
 <input name="name" placeholder="Nome" required><input name="pass_number" placeholder="N.º passe" required><input name="card_uid" placeholder="UID NFC" required><input type="date" name="valid_until" required>
 
