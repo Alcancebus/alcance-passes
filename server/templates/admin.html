@@ -6,7 +6,9 @@
 body{font-family:Arial,sans-serif;margin:30px;background:#f5f6f7}.container{max-width:1400px;margin:auto;background:white;padding:25px;border-radius:8px}
 input,select,button{padding:9px;margin:4px}button{cursor:pointer}table{width:100%;border-collapse:collapse;margin-top:15px}th,td{border:1px solid #ddd;padding:9px}th{background:#222;color:white;text-align:left}.box{margin-top:30px;padding:20px;background:#f5f5f5;border-radius:8px}.small{font-size:13px;color:#666}.fare{font-weight:bold;white-space:nowrap}
 </style></head><body><div class="container">
-<h1>Administração Alcance Bus</h1><a href="/cim">Portal CIM</a> | <a href="/logout">Sair</a>
+<h1>Administração Alcance Bus</h1>
+{% if request.query_params.get("nif_saved") %}<p style="color:green;font-weight:bold;">NIF guardado com sucesso.</p>{% endif %}
+{% if request.query_params.get("nif_error") %}<p style="color:red;font-weight:bold;">O NIF deve ter exatamente 9 algarismos.</p>{% endif %}<a href="/cim">Portal CIM</a> | <a href="/logout">Sair</a>
 
 <div class="box"><h2>Segurança</h2><h3>Alterar palavra-passe de Administrador</h3>
 {% if request.query_params.get("password_changed") %}<p style="color:green;font-weight:bold;">Palavra-passe alterada com sucesso.</p>{% endif %}
@@ -79,7 +81,12 @@ input,select,button{padding:9px;margin:4px}button{cursor:pointer}table{width:100
 <h2>Passes</h2><table><tr><th>Nome</th><th>NIF</th><th>N.º passe</th><th>UID NFC</th><th>Validade</th><th>Linha</th><th>Paragem</th><th>Zona</th><th>Estado</th><th>Ações</th></tr>
 {% for p in passengers %}
 <tr><td><input form="edit-pass-{{p.id}}" name="name" value="{{p.name}}" required></td>
-<td><input form="edit-pass-{{p.id}}" name="nif" value="{{p.nif or ''}}" placeholder="NIF" inputmode="numeric" maxlength="9"></td>
+<td>
+<form method="post" action="/admin/passenger/{{p.id}}/nif" style="display:flex;gap:4px;align-items:center;margin:0;">
+<input name="nif" value="{{p.nif or ''}}" placeholder="NIF" inputmode="numeric" pattern="[0-9]{9}" minlength="9" maxlength="9" required style="width:110px;">
+<button type="submit">Guardar NIF</button>
+</form>
+</td>
 <td><input form="edit-pass-{{p.id}}" name="pass_number" value="{{p.pass_number}}" required></td><td><input form="edit-pass-{{p.id}}" name="card_uid" value="{{p.card_uid}}" required></td><td><input form="edit-pass-{{p.id}}" type="date" name="valid_until" value="{{p.valid_until}}" required></td>
 <td colspan="2">
 <select form="edit-pass-{{p.id}}" name="route_choice" required>
