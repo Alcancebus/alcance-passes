@@ -48,7 +48,7 @@ input,select,button{padding:9px;margin:4px}button{cursor:pointer}table{width:100
 <div class="box"><h2>Novo passe</h2><form method="post" action="/admin/passenger">
 <input name="name" placeholder="Nome" required><input name="nif" placeholder="NIF" inputmode="numeric" maxlength="9"><input name="pass_number" placeholder="N.º passe" required><input name="card_uid" placeholder="UID NFC" required><input type="date" name="valid_until" required>
 
-<select name="route_choice" required onchange="syncRoute(this)">
+<select name="route_choice" required>
 <option value="">Linha e paragem</option>
 <optgroup label="Linha 1">
 <option value="Linha 1|Figueiró">Figueiró — Zona 9-12</option>
