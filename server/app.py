@@ -34,6 +34,7 @@ class Passenger(Base):
  stop=Column(String,nullable=True)
  fare_zone=Column(String,nullable=True)
  nif=Column(String,nullable=True)
+ birth_date=Column(String,nullable=True)
 class Trip(Base):
  __tablename__="trips"; id=Column(Integer,primary_key=True); device=Column(String); line=Column(String); direction=Column(String); started_at=Column(DateTime,default=datetime.now); ended_at=Column(DateTime,nullable=True)
 class HistoricalTrip(Base):
@@ -62,6 +63,7 @@ class CIMReportRow(Base):
  id=Column(Integer,primary_key=True)
  report_id=Column(Integer,ForeignKey("cim_reports.id"))
  nif=Column(String,nullable=True)
+ birth_date=Column(String,nullable=True)
  name=Column(String)
  title=Column(String,nullable=True)
  pvp=Column(String,nullable=True)
@@ -79,12 +81,17 @@ def ensure_passenger_columns():
    conn.exec_driver_sql("ALTER TABLE passengers ADD COLUMN IF NOT EXISTS stop VARCHAR")
    conn.exec_driver_sql("ALTER TABLE passengers ADD COLUMN IF NOT EXISTS fare_zone VARCHAR")
    conn.exec_driver_sql("ALTER TABLE passengers ADD COLUMN IF NOT EXISTS nif VARCHAR")
+   conn.exec_driver_sql("ALTER TABLE passengers ADD COLUMN IF NOT EXISTS birth_date VARCHAR")
+   conn.exec_driver_sql("ALTER TABLE cim_report_rows ADD COLUMN IF NOT EXISTS birth_date VARCHAR")
   elif engine.dialect.name=="sqlite":
    cols={row[1] for row in conn.exec_driver_sql("PRAGMA table_info(passengers)").fetchall()}
    if "line" not in cols: conn.exec_driver_sql("ALTER TABLE passengers ADD COLUMN line VARCHAR")
    if "stop" not in cols: conn.exec_driver_sql("ALTER TABLE passengers ADD COLUMN stop VARCHAR")
    if "fare_zone" not in cols: conn.exec_driver_sql("ALTER TABLE passengers ADD COLUMN fare_zone VARCHAR")
    if "nif" not in cols: conn.exec_driver_sql("ALTER TABLE passengers ADD COLUMN nif VARCHAR")
+   if "birth_date" not in cols: conn.exec_driver_sql("ALTER TABLE passengers ADD COLUMN birth_date VARCHAR")
+   report_cols={row[1] for row in conn.exec_driver_sql("PRAGMA table_info(cim_report_rows)").fetchall()}
+   if "birth_date" not in report_cols: conn.exec_driver_sql("ALTER TABLE cim_report_rows ADD COLUMN birth_date VARCHAR")
 
 ensure_passenger_columns()
 def seed():
@@ -230,26 +237,35 @@ STOP_ZONES={
   "Calvos - Reta":"5-8","Ortezelo":"0-4","Rossas":"DESTINO"
  }
 }
+def clean_birth_date(value):
+ if not value: return None
+ try:
+  parsed=date.fromisoformat(value)
+  if parsed>date.today() or parsed.year<1900: raise ValueError()
+  return parsed.isoformat()
+ except ValueError: raise HTTPException(400,"Data de nascimento inválida.")
+
 def passenger_zone(line,stop):
  zone=STOP_ZONES.get(line,{}).get(stop)
  if not zone: raise HTTPException(400,"Paragem inválida para a linha selecionada.")
  return zone
 
 @app.post("/admin/passenger")
-def add(r:Request,name:str=Form(...),pass_number:str=Form(...),card_uid:str=Form(...),valid_until:str=Form(...),route_choice:str=Form(...),nif:str=Form("")):
+def add(r:Request,name:str=Form(...),pass_number:str=Form(...),card_uid:str=Form(...),valid_until:str=Form(...),route_choice:str=Form(...),nif:str=Form(""),birth_date:str=Form("")):
  if not ok(r,["admin"]): return RedirectResponse("/",303)
  try:
   line,stop=route_choice.split("|",1)
  except ValueError:
   raise HTTPException(400,"Linha/paragem inválida.")
  zone=passenger_zone(line,stop)
+ birth_date=clean_birth_date(birth_date)
  d=DB()
- d.add(Passenger(name=name.strip(),pass_number=pass_number.strip(),card_uid=card_uid.strip().upper(),valid_until=valid_until,line=line,stop=stop,fare_zone=zone,nif=nif.strip() or None))
+ d.add(Passenger(name=name.strip(),pass_number=pass_number.strip(),card_uid=card_uid.strip().upper(),valid_until=valid_until,line=line,stop=stop,fare_zone=zone,nif=nif.strip() or None,birth_date=birth_date))
  d.commit(); d.close()
  return RedirectResponse("/admin",303)
 
 @app.post("/admin/passenger/{pid}/edit")
-def edit_passenger(pid:int,r:Request,name:str=Form(...),pass_number:str=Form(...),card_uid:str=Form(...),valid_until:str=Form(...),route_choice:str=Form(...)):
+def edit_passenger(pid:int,r:Request,name:str=Form(...),pass_number:str=Form(...),card_uid:str=Form(...),valid_until:str=Form(...),route_choice:str=Form(...),birth_date:str=Form("")):
  if not ok(r,["admin"]): return RedirectResponse("/",303)
  try:
   line,stop=route_choice.split("|",1)
@@ -259,7 +275,7 @@ def edit_passenger(pid:int,r:Request,name:str=Form(...),pass_number:str=Form(...
  d=DB(); p=d.get(Passenger,pid)
  if p:
   p.name=name.strip(); p.pass_number=pass_number.strip(); p.card_uid=card_uid.strip().upper()
-  p.valid_until=valid_until; p.line=line; p.stop=stop; p.fare_zone=zone
+  p.valid_until=valid_until; p.line=line; p.stop=stop; p.fare_zone=zone; p.birth_date=clean_birth_date(birth_date)
   d.commit()
  d.close()
  return RedirectResponse("/admin",303)
@@ -532,7 +548,7 @@ async def import_cim_report(r:Request,file:UploadFile=File(...),replace:str=Form
     continue
    empty_streak=0
    compensation=values[10] if values[10] is not None else values[4]
-   rows.append({"nif":str(nif).strip() if nif is not None else None,"name":str(name).strip() if name is not None else "","title":str(values[3]).strip() if values[3] is not None else None,"pvp":str(values[4]).strip() if values[4] is not None else None,"origin":str(values[5]).strip() if values[5] is not None else None,"destination":str(values[6]).strip() if values[6] is not None else None,"school":str(values[7]).strip() if values[7] is not None else None,"validations":to_int(values[8])+to_int(values[9]),"compensation":str(compensation).strip() if compensation is not None else None})
+   rows.append({"nif":str(nif).strip() if nif is not None else None,"name":str(name).strip() if name is not None else "","birth_date":(values[2].date().isoformat() if isinstance(values[2],datetime) else values[2].isoformat() if isinstance(values[2],date) else str(values[2]).strip() if values[2] is not None else None),"title":str(values[3]).strip() if values[3] is not None else None,"pvp":str(values[4]).strip() if values[4] is not None else None,"origin":str(values[5]).strip() if values[5] is not None else None,"destination":str(values[6]).strip() if values[6] is not None else None,"school":str(values[7]).strip() if values[7] is not None else None,"validations":to_int(values[8])+to_int(values[9]),"compensation":str(compensation).strip() if compensation is not None else None})
   wb.close(); wb=None
   if not rows: raise HTTPException(400,"O relatório não contém beneficiários para importar.")
   d=DB()
@@ -629,6 +645,7 @@ def generate_cim_report(r:Request,month:str=Form(...),replace:str=Form("0")):
    generated.append({
     "nif":p.nif or "",
     "name":p.name or "",
+    "birth_date":p.birth_date,
     "title":p.pass_number or "",
     "pvp":automatic_euro_text(pvp),
     "origin":p.stop or "",
@@ -774,6 +791,57 @@ def detail(tid:int,r:Request):
  if not ok(r,["admin","cim"]):return RedirectResponse("/",303)
  d=DB();t=d.get(Trip,tid);rows=d.query(Validation,Passenger).outerjoin(Passenger,Validation.passenger_id==Passenger.id).filter(Validation.trip_id==tid).order_by(Validation.timestamp).all();d.close()
  return templates.TemplateResponse("trip.html",{"request":r,"trip":t,"rows":rows})
+
+@app.get("/cim/export.xlsx")
+def export_cim_xlsx(r:Request,month:str):
+ if not ok(r,["admin","cim"]): return RedirectResponse("/",303)
+ try:
+  year,month_number=map(int,month.split("-"))
+  if not 1<=month_number<=12: raise ValueError()
+ except ValueError: raise HTTPException(400,"Mês inválido")
+ d=DB()
+ try:
+  report=d.query(CIMReport).filter_by(year=year,month=month_number).first()
+  if not report: raise HTTPException(404,"Gere ou importe primeiro o relatório deste mês.")
+  rows=d.query(CIMReportRow).filter_by(report_id=report.id).order_by(CIMReportRow.name).all()
+  wb=openpyxl.load_workbook(os.path.join(os.path.dirname(__file__),"cim_template.xlsx"))
+  ws=wb.worksheets[0]; summary=wb.worksheets[2]
+  months=["JANEIRO","FEVEREIRO","MARÇO","ABRIL","MAIO","JUNHO","JULHO","AGOSTO","SETEMBRO","OUTUBRO","NOVEMBRO","DEZEMBRO"]
+  ws["B5"]="MUNICÍPIO DE VIEIRA DO MINHO";ws["B6"]=year;ws["B7"]=months[month_number-1]
+  total=0
+  from openpyxl.styles import PatternFill,Alignment
+  for i,entry in enumerate(rows,13):
+   birth=entry.birth_date or ""
+   if not birth and entry.title:
+    passenger=d.query(Passenger).filter(Passenger.pass_number==entry.title).first()
+    if passenger and passenger.name.strip().casefold()==entry.name.strip().casefold():birth=passenger.birth_date or ""
+   # Não expor erros como datas válidas; nunca inventar dados.
+   try:
+    birth=date.fromisoformat(str(birth)) if birth else None
+   except ValueError:
+    birth=str(birth)
+   price_raw=str(entry.pvp or "").replace("€","").replace(" ","").replace(",",".")
+   try: price=float(Decimal(price_raw))
+   except Exception: price=None
+   count=int(entry.validations or 0)
+   total+=count
+   values=["MUNICÍPIO DE VIEIRA DO MINHO","ALCANCE DA PERFEIÇÃO UNIPESSOAL LDA",year,months[month_number-1],entry.nif or "",entry.name,birth,entry.title or "",price,entry.origin or "",entry.destination or "",entry.school or "",count,None,None]
+   for col,value in enumerate(values,1):ws.cell(i,col,value)
+   ws.cell(i,9).number_format='#,##0.00 "€"'
+   ws.cell(i,7).number_format="DD/MM/YYYY"
+   ws.cell(i,15,f'=IF(OR(I{i}="",M{i}=""),"",ROUND(I{i}*MIN(10,M{i})*10%,2))')
+   ws.cell(i,15).number_format='#,##0.00 "€"'
+   for col in (13,15):ws.cell(i,col).fill=PatternFill('solid',fgColor='E5F1E9')
+  summary["A1"]=f"RESUMO {months[month_number-1]} {year}"
+  summary["B2"]=len(rows);summary["B3"]=total;summary["B4"]=f"{month_number:02d}/{year}"
+  summary["B5"]="Tabela congelada de junho de 2026; valores de cada passe conforme relatório"
+  summary["B6"]=report.source
+  summary["B7"]=f"=SUM('{ws.title}'!O13:O{max(13,12+len(rows))})"
+  summary["B8"]="Conferir dados dos passes novos e período efetivamente registado antes de entregar"
+  out=BytesIO();wb.save(out);out.seek(0)
+  return StreamingResponse(out,media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",headers={"Content-Disposition":f'attachment; filename="CIM_{year}-{month_number:02d}.xlsx"'})
+ finally:d.close()
+
 @app.get("/cim/export.csv")
 def export(r:Request,month:str):
  if not ok(r,["admin","cim"]):
