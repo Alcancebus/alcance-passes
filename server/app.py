@@ -855,6 +855,19 @@ def export_cim_xlsx(r:Request,month:str):
    ws.cell(i,15, float(compensation) if compensation is not None else None)
    ws.cell(i,15).number_format='#,##0.00 "€"'
    for col in (13,15):ws.cell(i,col).fill=PatternFill('solid',fgColor='E5F1E9')
+  # Linha de total imediatamente após o último passageiro da folha Com NIF.
+  # Os montantes individuais mantêm-se e o total é gravado como valor numérico.
+  from openpyxl.styles import Font, Border, Side
+  total_row = 13 + len(rows)
+  ws.cell(total_row, 14, "TOTAL")
+  ws.cell(total_row, 15, float(total_compensation))
+  ws.cell(total_row, 15).number_format = '#,##0.00 "€"'
+  for col in (14, 15):
+   c = ws.cell(total_row, col)
+   c.font = Font(bold=True)
+   c.fill = PatternFill('solid', fgColor='DCEBDF')
+   c.border = Border(top=Side(style='thin', color='64836B'))
+   c.alignment = Alignment(vertical='center', horizontal='right')
   summary["A1"]=f"RESUMO {months[month_number-1]} {year}"
   summary["B2"]=len(rows);summary["B3"]=total;summary["B4"]=f"{month_number:02d}/{year}"
   summary["B5"]="Tabela congelada de junho de 2026; valores de cada passe conforme relatório"
