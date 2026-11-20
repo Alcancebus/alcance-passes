@@ -792,6 +792,24 @@ def detail(tid:int,r:Request):
  d=DB();t=d.get(Trip,tid);rows=d.query(Validation,Passenger).outerjoin(Passenger,Validation.passenger_id==Passenger.id).filter(Validation.trip_id==tid).order_by(Validation.timestamp).all();d.close()
  return templates.TemplateResponse("trip.html",{"request":r,"trip":t,"rows":rows})
 
+def calculate_cim_compensation(pvp, validations):
+ """Valor monetário da compensação CIM, com arredondamento a cêntimos.
+
+ Uma validação: 10% do título; 10 ou mais: título completo.
+ Retorna None se faltar o preço, evitando apresentar montantes inventados.
+ """
+ from decimal import ROUND_HALF_UP
+ try:
+  raw=str(pvp).replace("€", "").replace("\xa0", "").replace(" ", "")
+  if "," in raw:
+   raw=raw.replace(".", "").replace(",", ".")
+  price=Decimal(raw)
+  if not price.is_finite() or price<0: return None
+  n=max(0,int(validations or 0))
+  return (price*Decimal(min(n,10))/Decimal("10")).quantize(Decimal("0.01"), rounding=ROUND_HALF_UP)
+ except (ValueError,TypeError,ArithmeticError):
+  return None
+
 @app.get("/cim/export.xlsx")
 def export_cim_xlsx(r:Request,month:str):
  if not ok(r,["admin","cim"]): return RedirectResponse("/",303)
@@ -809,6 +827,7 @@ def export_cim_xlsx(r:Request,month:str):
   months=["JANEIRO","FEVEREIRO","MARÇO","ABRIL","MAIO","JUNHO","JULHO","AGOSTO","SETEMBRO","OUTUBRO","NOVEMBRO","DEZEMBRO"]
   ws["B5"]="MUNICÍPIO DE VIEIRA DO MINHO";ws["B6"]=year;ws["B7"]=months[month_number-1]
   total=0
+  total_compensation=Decimal("0.00")
   from openpyxl.styles import PatternFill,Alignment
   for i,entry in enumerate(rows,13):
    birth=entry.birth_date or ""
@@ -829,14 +848,19 @@ def export_cim_xlsx(r:Request,month:str):
    for col,value in enumerate(values,1):ws.cell(i,col,value)
    ws.cell(i,9).number_format='#,##0.00 "€"'
    ws.cell(i,7).number_format="DD/MM/YYYY"
-   ws.cell(i,15,f'=IF(OR(I{i}="",M{i}=""),"",ROUND(I{i}*MIN(10,M{i})*10%,2))')
+   # Guardar o resultado numérico, não apenas uma fórmula sem valor calculado.
+   # Assim Excel, LibreOffice e visualizadores mostram imediatamente a compensação.
+   compensation = calculate_cim_compensation(entry.pvp, count)
+   if compensation is not None: total_compensation += compensation
+   ws.cell(i,15, float(compensation) if compensation is not None else None)
    ws.cell(i,15).number_format='#,##0.00 "€"'
    for col in (13,15):ws.cell(i,col).fill=PatternFill('solid',fgColor='E5F1E9')
   summary["A1"]=f"RESUMO {months[month_number-1]} {year}"
   summary["B2"]=len(rows);summary["B3"]=total;summary["B4"]=f"{month_number:02d}/{year}"
   summary["B5"]="Tabela congelada de junho de 2026; valores de cada passe conforme relatório"
   summary["B6"]=report.source
-  summary["B7"]=f"=SUM('{ws.title}'!O13:O{max(13,12+len(rows))})"
+  summary["B7"]=float(total_compensation)
+  summary["B7"].number_format='#,##0.00 "€"' 
   summary["B8"]="Conferir dados dos passes novos e período efetivamente registado antes de entregar"
   out=BytesIO();wb.save(out);out.seek(0)
   return StreamingResponse(out,media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",headers={"Content-Disposition":f'attachment; filename="CIM_{year}-{month_number:02d}.xlsx"'})
